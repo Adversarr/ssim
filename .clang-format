@@ -1,0 +1,27 @@
+---
+  BasedOnStyle: Google
+  ColumnLimit: 120
+  AccessModifierOffset: -2
+  AlignTrailingComments: true
+  AllowAllParametersOfDeclarationOnNextLine: false
+  AlwaysBreakTemplateDeclarations: Yes
+  BreakBeforeBraces: Attach
+  ConstructorInitializerAllOnOneLineOrOnePerLine: true
+  IncludeBlocks: Regroup
+  IndentPPDirectives: AfterHash
+  IndentWidth: 2
+  NamespaceIndentation: None
+  BreakBeforeBinaryOperators: All
+  BreakBeforeTernaryOperators: true
+  BreakConstructorInitializers: AfterColon
+  # BreakTemplateDeclarationsStyle: Yes
+  BracedInitializerIndentWidth: 2
+  AllowShortBlocksOnASingleLine: Always
+  AllowShortCaseLabelsOnASingleLine: false
+  AllowShortEnumsOnASingleLine: false
+  AllowShortFunctionsOnASingleLine: InlineOnly
+  AllowShortIfStatementsOnASingleLine: Never
+  AllowShortLambdasOnASingleLine: Empty
+  AllowShortLoopsOnASingleLine: false
+  SeparateDefinitionBlocks: Leave
+...
