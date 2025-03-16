@@ -13,4 +13,4 @@ macro(SSIM_ADD_TEST directory)
 endmacro()
 
 SSIM_ADD_TEST(fem_intro)
-
+SSIM_ADD_TEST(fem_local_global)

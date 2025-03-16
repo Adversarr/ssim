@@ -5,6 +5,25 @@
 namespace ssim::mesh {
 
 template <typename Scalar>
+line_mesh<Scalar, mp::device::cpu> simple_line(Scalar size, index_t n_vert = 2) {
+  using S = Scalar;
+  using D = mp::device::cpu;
+  line_mesh<S, D> mesh(n_vert, n_vert - 1);
+  auto vert = mp::eigen_support::cmap(mesh.vertices());  // [1, n_vert]
+  auto elem = mp::eigen_support::cmap(mesh.cells());     // [2, n_vert - 1]
+
+  for (index_t i = 0; i < n_vert; ++i) {
+    vert(0, i) = i * size / S(n_vert - 1);
+  }
+  for (index_t i = 0; i < n_vert - 1; ++i) {
+    elem(0, i) = i;
+    elem(1, i) = i + 1;
+  }
+
+  return mesh;
+}
+
+template <typename Scalar>
 manifold_mesh<Scalar, mp::device::cpu> simple_cube(Scalar size) {
   using S = Scalar;
   using D = mp::device::cpu;

@@ -100,14 +100,18 @@ private:
 };
 
 template <typename Scalar, typename Device>
-using tri_mesh_view = basic_unstructured_view<Scalar, Device, 2, 2>;
+using line_mesh_view = basic_unstructured_view<Scalar, Device, 1, 2>;
+template <typename Scalar, typename Device>
+using tri_mesh_view = basic_unstructured_view<Scalar, Device, 2, 3>;
 template <typename Scalar, typename Device>
 using manifold_mesh_view = basic_unstructured_view<Scalar, Device, 3, 3>;
 template <typename Scalar, typename Device>
 using tetmesh_view = basic_unstructured_view<Scalar, Device, 3, 4>;
 
 template <typename Scalar, typename Device>
-using tri_mesh = basic_unstructured<Scalar, Device, 2, 2>;
+using line_mesh = basic_unstructured<Scalar, Device, 1, 2>;
+template <typename Scalar, typename Device>
+using tri_mesh = basic_unstructured<Scalar, Device, 2, 3>;
 template <typename Scalar, typename Device>
 using manifold_mesh = basic_unstructured<Scalar, Device, 3, 3>;
 template <typename Scalar, typename Device>

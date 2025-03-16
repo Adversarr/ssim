@@ -2,8 +2,6 @@
 #include <mathprim/parallel/parallel.hpp>
 #include <mathprim/supports/eigen_dense.hpp>
 
-#include "ssim/elast/basic_elast.hpp"
-#include "ssim/elast/internal_physic.hpp"
 #include "ssim/mesh/basic_mesh.hpp"
 
 namespace ssim::fem {
