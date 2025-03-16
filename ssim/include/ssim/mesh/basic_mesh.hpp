@@ -37,12 +37,16 @@ public:
   using batched_cell = mp::batched<cell_type>;
 
   basic_unstructured_view() = default;
-  SSIM_INTERNAL_ALL_ENABLE(basic_unstructured_view);
+  SSIM_INTERNAL_ENABLE_ALL_CTOR(basic_unstructured_view);
   basic_unstructured_view(const batched_vertex& vertices, const batched_cell& cells) :
       vertices_(vertices), cells_(cells) {}
 
   SSIM_PRIMFUNC const batched_vertex& vertices() const noexcept { return vertices_; }
   SSIM_PRIMFUNC const batched_cell& cells() const noexcept { return cells_; }
+
+  SSIM_PRIMFUNC index_t num_vertices() const noexcept { return vertices_.shape(0); }
+  SSIM_PRIMFUNC index_t num_cells() const noexcept { return cells_.shape(0); }
+
   SSIM_PRIMFUNC basic_unstructured_view<std::add_const_t<Scalar>, Device, PhysicalDim, TopologyDim> as_const()
       const noexcept {
     return {vertices_.as_const(), cells_.as_const()};
@@ -78,14 +82,17 @@ public:
 
   basic_unstructured(index_t num_vertices, index_t num_cells) :
       vertices_(mp::make_buffer<Scalar, Device>(num_vertices, mp::holder<physical_dim>{})),
-      cells_(mp::make_buffer<Scalar, Device>(num_cells, mp::holder<topology_dim>{})) {}
+      cells_(mp::make_buffer<index_t, Device>(num_cells, mp::holder<topology_dim>{})) {}
 
   view_type view() noexcept { return {vertices_.view(), cells_.view()}; }
   const_view_type view() const noexcept { return const_view(); }
   const_view_type const_view() const noexcept { return {vertices_.const_view(), cells_.const_view()}; }
 
-  index_t num_vertices() const noexcept { return vertices_.size(); }
-  index_t num_cells() const noexcept { return cells_.size(); }
+  index_t num_vertices() const noexcept { return vertices_.shape(0); }
+  index_t num_cells() const noexcept { return cells_.shape(0); }
+
+  auto vertices() noexcept { return vertices_.view(); }
+  auto cells() noexcept { return cells_.view(); }
 
 private:
   batched_vertex_buffer vertices_;
@@ -93,16 +100,16 @@ private:
 };
 
 template <typename Scalar, typename Device>
-using trimesh_2d_view = basic_unstructured_view<Scalar, Device, 2, 2>;
+using tri_mesh_view = basic_unstructured_view<Scalar, Device, 2, 2>;
 template <typename Scalar, typename Device>
-using trimesh_3d_view = basic_unstructured_view<Scalar, Device, 3, 3>;
+using manifold_mesh_view = basic_unstructured_view<Scalar, Device, 3, 3>;
 template <typename Scalar, typename Device>
-using tetmesh_3d_view = basic_unstructured_view<Scalar, Device, 3, 4>;
+using tetmesh_view = basic_unstructured_view<Scalar, Device, 3, 4>;
 
 template <typename Scalar, typename Device>
-using trimesh_2d = basic_unstructured<Scalar, Device, 2, 2>;
+using tri_mesh = basic_unstructured<Scalar, Device, 2, 2>;
 template <typename Scalar, typename Device>
-using trimesh_3d = basic_unstructured<Scalar, Device, 3, 3>;
+using manifold_mesh = basic_unstructured<Scalar, Device, 3, 3>;
 template <typename Scalar, typename Device>
-using tetmesh_3d = basic_unstructured<Scalar, Device, 3, 4>;
+using tet_mesh = basic_unstructured<Scalar, Device, 3, 4>;
 }  // namespace ssim

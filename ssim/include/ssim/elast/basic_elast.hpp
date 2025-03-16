@@ -107,96 +107,72 @@ public:
     static_cast<const Derived*>(this)->hessian_impl(out, F, U, sigma, V, lambda, mu);
   }
 
+  struct energy_operator {
+    SSIM_PRIMFUNC explicit energy_operator(Derived model) : model_(model) {}
+    SSIM_INTERNAL_ENABLE_ALL_CTOR(energy_operator);
+
+    SSIM_PRIMFUNC scalar_type operator()(const def_grad_type& F,       //
+                                         const svd_matrix_type& U,     //
+                                         const svd_sigma_type& sigma,  //
+                                         const svd_matrix_type& V) const noexcept {
+      return model_.energy(F, U, sigma, V);
+    }
+
+    SSIM_PRIMFUNC scalar_type operator()(const def_grad_type& F) const noexcept {  //
+      return model_.energy(F, {}, {}, {});
+    }
+
+    Derived model_;
+  };
+
+  struct stress_operator {
+    SSIM_PRIMFUNC explicit stress_operator(Derived model) : model_(model) {}
+    SSIM_INTERNAL_ENABLE_ALL_CTOR(stress_operator);
+    SSIM_PRIMFUNC scalar_type operator()(const stress_type& out,       //
+                                         const def_grad_type& F,       //
+                                         const svd_matrix_type& U,     //
+                                         const svd_sigma_type& sigma,  //
+                                         const svd_matrix_type& V) const noexcept {
+      return model_.stress(out, F, U, sigma, V);
+    }
+
+    SSIM_PRIMFUNC scalar_type operator()(const stress_type& out,  //
+                                         const def_grad_type& F) const noexcept {
+      return model_.stress(out, F, {}, {}, {});
+    }
+
+    Derived model_;
+  };
+
+  struct hessian_operator {
+    SSIM_PRIMFUNC explicit hessian_operator(Derived model) : model_(model) {}
+    SSIM_INTERNAL_ENABLE_ALL_CTOR(hessian_operator);
+
+    SSIM_PRIMFUNC scalar_type operator()(const hessian_type& out,      //
+                                         const def_grad_type& F,       //
+                                         const svd_matrix_type& U,     //
+                                         const svd_sigma_type& sigma,  //
+                                         const svd_matrix_type& V) const noexcept {
+      return model_.hessian(out, F, U, sigma, V);
+    }
+
+    SSIM_PRIMFUNC scalar_type operator()(const hessian_type& out,  //
+                                         const def_grad_type& F) const noexcept {
+      return model_.hessian(out, F, {}, {}, {});
+    }
+
+    Derived model_;
+  };
+
+  Derived& derived() noexcept { return static_cast<Derived&>(*this); }
+  const Derived& derived() const noexcept { return static_cast<const Derived&>(*this); }
+
+  SSIM_PRIMFUNC auto energy_op() const noexcept { return energy_operator(derived()); }
+  SSIM_PRIMFUNC auto stress_op() const noexcept { return stress_operator(derived()); }
+  SSIM_PRIMFUNC auto hessian_op() const noexcept { return hessian_operator(derived()); }
+
   Scalar lambda_;
   Scalar mu_;
-};
-
-template <typename ElastImpl>
-class energy_operator {
-  using scalar_type = typename ElastImpl::scalar_type;
-  using device_type = typename ElastImpl::device_type;
-  using def_grad_type = typename ElastImpl::def_grad_type;
-  using stress_type = typename ElastImpl::stress_type;
-  using hessian_type = typename ElastImpl::hessian_type;
-  using svd_matrix_type = typename ElastImpl::svd_matrix_type;
-  using svd_sigma_type = typename ElastImpl::svd_sigma_type;
-  static constexpr index_t ndim = ElastImpl::ndim;
-
-  SSIM_PRIMFUNC explicit energy_operator(ElastImpl model) : model_(model) {}
-  SSIM_INTERNAL_ALL_ENABLE(energy_operator);
-
-  SSIM_PRIMFUNC scalar_type operator()(const def_grad_type& F,       //
-                                       const svd_matrix_type& U,     //
-                                       const svd_sigma_type& sigma,  //
-                                       const svd_matrix_type& V) const noexcept {
-    return model_.energy(F, U, sigma, V);
-  }
-
-  SSIM_PRIMFUNC scalar_type operator()(const def_grad_type& F) const noexcept {  //
-    return model_.energy(F, {}, {}, {});
-  }
-
-  ElastImpl model_;
-};
-
-template <typename ElastImpl>
-class stress_operator {
-  using scalar_type = typename ElastImpl::scalar_type;
-  using device_type = typename ElastImpl::device_type;
-  using def_grad_type = typename ElastImpl::def_grad_type;
-  using stress_type = typename ElastImpl::stress_type;
-  using hessian_type = typename ElastImpl::hessian_type;
-  using svd_matrix_type = typename ElastImpl::svd_matrix_type;
-  using svd_sigma_type = typename ElastImpl::svd_sigma_type;
-  static constexpr index_t ndim = ElastImpl::ndim;
-
-  SSIM_PRIMFUNC explicit stress_operator(ElastImpl model) : model_(model) {}
-  SSIM_INTERNAL_ALL_ENABLE(stress_operator);
-
-  SSIM_PRIMFUNC scalar_type operator()(const stress_type& out,       //
-                                       const def_grad_type& F,       //
-                                       const svd_matrix_type& U,     //
-                                       const svd_sigma_type& sigma,  //
-                                       const svd_matrix_type& V) const noexcept {
-    return model_.stress(out, F, U, sigma, V);
-  }
-
-  SSIM_PRIMFUNC scalar_type operator()(const stress_type& out,  //
-                                       const def_grad_type& F) const noexcept {
-    return model_.stress(out, F, {}, {}, {});
-  }
-
-  ElastImpl model_;
-};
-
-template <typename ElastImpl>
-class hessian_operator {
-  using scalar_type = typename ElastImpl::scalar_type;
-  using device_type = typename ElastImpl::device_type;
-  using def_grad_type = typename ElastImpl::def_grad_type;
-  using stress_type = typename ElastImpl::stress_type;
-  using hessian_type = typename ElastImpl::hessian_type;
-  using svd_matrix_type = typename ElastImpl::svd_matrix_type;
-  using svd_sigma_type = typename ElastImpl::svd_sigma_type;
-  static constexpr index_t ndim = ElastImpl::ndim;
-
-  SSIM_PRIMFUNC explicit hessian_operator(ElastImpl model) : model_(model) {}
-  SSIM_INTERNAL_ALL_ENABLE(hessian_operator);
-
-  SSIM_PRIMFUNC scalar_type operator()(const hessian_type& out,      //
-                                       const def_grad_type& F,       //
-                                       const svd_matrix_type& U,     //
-                                       const svd_sigma_type& sigma,  //
-                                       const svd_matrix_type& V) const noexcept {
-    return model_.hessian(out, F, U, sigma, V);
-  }
-
-  SSIM_PRIMFUNC scalar_type operator()(const hessian_type& out,  //
-                                       const def_grad_type& F) const noexcept {
-    return model_.hessian(out, F, {}, {}, {});
-  }
-
-  ElastImpl model_;
 };
 
 }  // namespace ssim::elast

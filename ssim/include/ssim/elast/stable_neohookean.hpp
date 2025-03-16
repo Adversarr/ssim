@@ -17,8 +17,9 @@ public:
   using svd_sigma_type = typename base::svd_sigma_type;
   static constexpr index_t ndim = base::ndim;
   stable_neohookean(Scalar lambda, Scalar mu) : base(lambda, mu) {}
-  SSIM_INTERNAL_ALL_ENABLE(stable_neohookean);
+  SSIM_INTERNAL_ENABLE_ALL_CTOR(stable_neohookean);
 
+private:
   SSIM_PRIMFUNC scalar_type energy_impl(const def_grad_type& F,             //
                                         const svd_matrix_type& /* U */,     //
                                         const svd_sigma_type& /* sigma */,  //

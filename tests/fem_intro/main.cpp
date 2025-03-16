@@ -1,8 +1,12 @@
 #include <gtest/gtest.h>
 
+#include <mathprim/parallel/parallel.hpp>
+
 #include "ssim/elast/linear.hpp"
 #include "ssim/elast/stable_neohookean.hpp"
-#include "ssim/mesh/basic_mesh.hpp"
+#include "ssim/finite_elements/def_grad.hpp"
+#include "ssim/finite_elements/rest_vol.hpp"
+#include "ssim/mesh/common_shapes.hpp"
 
 using namespace ssim;
 
@@ -291,4 +295,40 @@ GTEST_TEST(elast, snh2) {
       }
     }
   }
+}
+
+using namespace mp::literal;
+
+GTEST_TEST(elast, vmap) {
+  auto F = mp::make_buffer<float>(4, 3_s, 3_s);
+  auto energy = mp::make_buffer<float>(4);
+  auto dEdF = mp::make_buffer<float>(4, 3_s, 3_s);
+  auto elast = elast::stable_neohookean<float, mp::device::cpu, 3>(1, 1);
+  // we just check it will compile.
+  mp::par::seq().vmap(mp::par::make_output_vmapped(elast.stress_op()), energy.view(), dEdF.view(), F.view());
+}
+
+GTEST_TEST(deform, vmap) {
+  auto mesh = mesh::unit_box<float>();
+  auto dminv = mp::make_buffer<float>(mesh.num_cells(), 3_s, 3_s);
+  auto pfpx = mp::make_buffer<float>(mesh.num_cells(), 9_s, 12_s);
+  auto f = mp::make_buffer<float>(mesh.num_cells(), 3_s, 3_s);
+  auto zeros = mp::make_buffer<float>(mesh.vertices().shape());
+  auto rest_vol = mp::make_buffer<float>(mesh.num_cells());
+  zeros.fill_bytes(0);
+  auto pf = mp::par::seq();
+  ssim::fem::deformation_gradient<float, mp::device::cpu, 3, 4> def_grad(mesh.const_view());
+  ssim::fem::rest_vol_task<float, mp::device::cpu, 3, 4> rest_vol_task(mesh.const_view(), rest_vol.view());
+  pf.run(rest_vol_task);
+  pf.run(def_grad.compute_dminv(dminv.view()));
+  pf.run(def_grad.compute_pfpx(pfpx.view(), dminv.const_view()));
+  pf.run(def_grad.compute_def_grad(f.view(), dminv.const_view(), zeros.view()));
+  float total_vol = 0;
+  for (index_t i = 0; i < mesh.num_cells(); ++i) {
+    auto fi = mp::eigen_support::map(f.view()[i]);
+    // Assert fi is nearly Identity
+    EXPECT_NEAR((fi - Eigen::Matrix<float, 3, 3>::Identity()).squaredNorm(), 0, 1e-6);
+    total_vol += rest_vol.view()[i];
+  }
+  EXPECT_NEAR(total_vol, 1, 1e-6);
 }

@@ -18,8 +18,9 @@ public:
   static constexpr index_t ndim = base::ndim;
 
   linear(Scalar lambda, Scalar mu) : base(lambda, mu) {}
-  SSIM_INTERNAL_ALL_ENABLE(linear);
+  SSIM_INTERNAL_ENABLE_ALL_CTOR(linear);
 
+private:
   SSIM_PRIMFUNC scalar_type energy_impl(const def_grad_type& F,             //
                                         const svd_matrix_type& /* U */,     //
                                         const svd_sigma_type& /* sigma */,  //
