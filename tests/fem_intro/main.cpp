@@ -318,8 +318,7 @@ GTEST_TEST(deform, vmap) {
   zeros.fill_bytes(0);
   auto pf = mp::par::seq();
   ssim::fem::deformation_gradient<float, mp::device::cpu, 3, 4> def_grad(mesh.const_view());
-  ssim::fem::rest_vol_task<float, mp::device::cpu, 3, 4> rest_vol_task(mesh.const_view(), rest_vol.view());
-  pf.run(rest_vol_task);
+  pf.run(ssim::fem::make_rest_vol_task(mesh.view(), rest_vol.view()));
   pf.run(def_grad.compute_dminv(dminv.view()));
   pf.run(def_grad.compute_pfpx(pfpx.view(), dminv.const_view()));
   pf.run(def_grad.compute_def_grad(f.view(), dminv.const_view(), zeros.view()));

@@ -7,14 +7,13 @@
 namespace ssim::fem {
 
 // Logically, it converts bcoo to csr, by defining a gather operation.
-template <typename Scalar, typename Device, index_t PhysicalDim, index_t TopologyDim>
+template <typename Scalar, typename Device, index_t PhysicalDim, index_t TopologyDim, index_t DofsPerNode>
 class local_global_composer {
 public:
   using scalar_type = Scalar;
-  using device_type = Device;
-  static constexpr index_t physical_dim = PhysicalDim;
+  using device_type = Device; static constexpr index_t physical_dim = PhysicalDim;
   static constexpr index_t topology_dim = TopologyDim;
-  static constexpr index_t dofs_per_node = PhysicalDim;
+  static constexpr index_t dofs_per_node = DofsPerNode;
   static constexpr index_t hessian_nrows = topology_dim * dofs_per_node;
 
   using local_stiffness = mp::contiguous_view<Scalar, mp::shape_t<hessian_nrows, hessian_nrows>, Device>;

@@ -81,10 +81,10 @@ if [ $? -ne 0 ]; then
   exit
 fi
 Echo "${INFO_COLOR}mathprim installed to $(pwd)/installed.${NO_COLOR}"
-echo "remove _build directories? ([y]/n)"
+echo "remove _build directories? (y/[n])"
 read -r answer
 
-if [ "$answer" = "y" ] || [ "$answer" = "" ]; then
+if [ "$answer" = "y" ]; then
   rm -rf _build
   Echo "${INFO_COLOR}Remove _build.${NO_COLOR}"
 fi

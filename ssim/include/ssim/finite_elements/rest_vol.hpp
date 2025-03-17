@@ -66,4 +66,10 @@ public:
   rest_volume rest_vol_;
 };
 
+template <typename Scalar, typename Device, index_t PhysicalDim, index_t TopologyDim>
+auto make_rest_vol_task(basic_unstructured_view<Scalar, Device, PhysicalDim, TopologyDim> mesh,
+                        mp::contiguous_vector_view<Scalar, Device> rest_vol) {
+  return rest_vol_task<std::remove_const_t<Scalar>, Device, PhysicalDim, TopologyDim>(mesh.as_const(), rest_vol);
+}
+
 }  // namespace ssim::fem

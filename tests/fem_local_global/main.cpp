@@ -1,10 +1,11 @@
 #include <gtest/gtest.h>
 
-#include <mathprim/supports/eigen_sparse.hpp>
 #include <mathprim/parallel/parallel.hpp>
+#include <mathprim/supports/eigen_sparse.hpp>
 
 #include "ssim/elast/linear.hpp"
 #include "ssim/elast/stable_neohookean.hpp"
+#include "ssim/finite_elements/bilinears.hpp"
 #include "ssim/finite_elements/def_grad.hpp"
 #include "ssim/finite_elements/global_composer.hpp"
 #include "ssim/mesh/common_shapes.hpp"
@@ -21,7 +22,7 @@ GTEST_TEST(gather, 1d) {
   }
 
   auto seq = mp::par::seq{};
-  auto composer = fem::local_global_composer<float, mp::device::cpu, 1, 2>{};
+  auto composer = fem::local_global_composer<float, mp::device::cpu, 1, 2, 1>{};
 
   /// stress
   auto stress_on_elements_buf = mp::make_buffer<float>(nE, 2, 1_s);
@@ -29,10 +30,10 @@ GTEST_TEST(gather, 1d) {
   stress_on_nodes_buf.fill_bytes(0);
   auto stress_on_elements = stress_on_elements_buf.view();
   auto stress_on_nodes = stress_on_nodes_buf.view();
-  for (auto [i, j, k]: stress_on_elements.shape()) {
+  for (auto [i, j, k] : stress_on_elements.shape()) {
     stress_on_elements(i, j, k) = i * 2 + j;
   }
-  
+
   auto gather_stress = composer.force(line.const_view(), cell_values);
   mp::sparse::basic_gather_operator<float, mp::device::cpu, 1> gather_stress_operator(
       stress_on_nodes, stress_on_elements.reshape(nE * 2, 1_s), gather_stress.desc());
@@ -52,7 +53,7 @@ GTEST_TEST(gather, 1d) {
   using hes = mp::sparse::basic_sparse_matrix<float, mp::device::cpu, mathprim::sparse::sparse_format::csr>;
   auto hessian_on_elements_buf = mp::make_buffer<float>(nE, 2_s, 2_s);
   auto hessian_on_elements = hessian_on_elements_buf.view();
-  for (auto [i, j, k]: hessian_on_elements.shape()) {
+  for (auto [i, j, k] : hessian_on_elements.shape()) {
     hessian_on_elements(i, j, k) = i * 4 + j * 2 + k;
   }
 
@@ -81,7 +82,6 @@ GTEST_TEST(gather, 1d) {
   seq.run(expectation);
 }
 
-
 GTEST_TEST(gather, 3d) {
   auto line = mesh::unit_box<float>(2, 2, 2);
   auto nV = line.num_vertices(), nE = line.num_cells();
@@ -92,7 +92,7 @@ GTEST_TEST(gather, 3d) {
   }
 
   auto seq = mp::par::seq{};
-  auto composer = fem::local_global_composer<float, mp::device::cpu, 3, 4>{};
+  auto composer = fem::local_global_composer<float, mp::device::cpu, 3, 4, 3>{};
 
   /// stress
   auto stress_on_elements_buf = mp::make_buffer<float>(nE, 4_s, 3_s);
@@ -100,10 +100,10 @@ GTEST_TEST(gather, 3d) {
   stress_on_nodes_buf.fill_bytes(0);
   auto stress_on_elements = stress_on_elements_buf.view();
   auto stress_on_nodes = stress_on_nodes_buf.view();
-  for (auto [i, j, k]: stress_on_elements.shape()) {
+  for (auto [i, j, k] : stress_on_elements.shape()) {
     stress_on_elements(i, j, k) = i * 12 + j * 3 + k;
   }
-  
+
   auto gather_stress = composer.force(line.const_view(), cell_values);
   mp::sparse::basic_gather_operator<float, mp::device::cpu, 1> gather_stress_operator(
       stress_on_nodes, stress_on_elements.reshape(nE * 4, 3_s), gather_stress.desc());
@@ -128,7 +128,7 @@ GTEST_TEST(gather, 3d) {
   using hes = mp::sparse::basic_sparse_matrix<float, mp::device::cpu, mathprim::sparse::sparse_format::csr>;
   auto hessian_on_elements_buf = mp::make_buffer<float>(nE, 12_s, 12_s);
   auto hessian_on_elements = hessian_on_elements_buf.view();
-  for (auto [i, j, k]: hessian_on_elements.shape()) {
+  for (auto [i, j, k] : hessian_on_elements.shape()) {
     hessian_on_elements(i, j, k) = i * 144 + j * 12 + k;
   }
 
@@ -150,7 +150,7 @@ GTEST_TEST(gather, 3d) {
   }
 
   hes hessian = mp::sparse::make_from_coos<float, mathprim::sparse::sparse_format::csr>(
-      mp::sparse::make_from_triplets<float>(topo.begin(), topo.end(), nV*3, nV*3));
+      mp::sparse::make_from_triplets<float>(topo.begin(), topo.end(), nV * 3, nV * 3));
   auto gather_hessian = composer.hessian(line.const_view(), cell_values);
   mp::sparse::basic_gather_operator<float, mp::device::cpu, 0> gather_hessian_operator(
       hessian.view().values(), hessian_on_elements.flatten(), gather_hessian.desc());
@@ -163,3 +163,35 @@ GTEST_TEST(gather, 3d) {
   seq.run(expectation);
 }
 
+GTEST_TEST(fem, integration) {
+  // using mass = fem::linear_element_integrator<float, mp::device::cpu, 3, 4, 0>;
+  auto mesh_object = mesh::unit_box<float>(2, 2, 2);
+  auto nE = mesh_object.num_cells();
+  auto local_buf = mp::make_buffer<float>(nE, 4, 4);
+  local_buf.fill_bytes(0);
+  auto local = local_buf.view();
+  auto seq = mp::par::seq();
+
+  // mass mass_integrator(mesh_object.const_view());
+  auto mass_integrator = fem::mass_integrator(mesh_object.view());
+  seq.run(mass_integrator, local);
+
+  float total_mass = 0;
+  for (auto [i, j, k] : local.shape()) {
+    total_mass += local(i, j, k);
+  }
+  // expect 1
+  EXPECT_NEAR(total_mass, 1, 1e-6);
+
+  // stiffness
+  local_buf.fill_bytes(0);
+  auto laplace_integrator = fem::laplace_integrator(mesh_object.view());
+  seq.run(laplace_integrator, local);
+
+  float total_laplace = 0;
+  for (auto [i, j, k] : local.shape()) {
+    total_laplace += local(i, j, k);
+  }
+  // expect 0
+  EXPECT_NEAR(total_laplace, 0, 1e-6);
+}

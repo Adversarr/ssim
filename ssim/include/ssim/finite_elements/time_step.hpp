@@ -1,22 +1,50 @@
 #pragma once
+#include <iostream>
+#include <mathprim/blas/blas.hpp>
+#include <mathprim/core/buffer.hpp>
+#include <mathprim/sparse/basic_sparse.hpp>
+#include <mathprim/sparse/cvt.hpp>
 #include <mathprim/sparse/gather.hpp>
-#include "ssim/mesh/basic_mesh.hpp"
+#include <stdexcept>
+
 #include "boundary.hpp"
+#include "ssim/defines.hpp"
+#include "ssim/elast/basic_elast.hpp"
+#include "ssim/finite_elements/bilinears.hpp"
+#include "ssim/finite_elements/def_grad.hpp"
+#include "ssim/finite_elements/global_composer.hpp"
+#include "ssim/finite_elements/rest_vol.hpp"
+#include "ssim/mesh/basic_mesh.hpp"
 
 namespace ssim::fem {
 
-template <typename Scalar, typename Device, index_t PhysicalDim, index_t TopologyDim, typename ElastModel>
-class basic_time_step;
-
-template <typename Derived, typename Scalar, typename Device, index_t PhysicalDim, index_t TopologyDim,
-          typename SparseBlas, typename Blas, typename ParImpl>
-class basic_time_step_solver;
-
+/**
+ * Mesh stage: (in constructor, not editable)
+ *    -> mesh topology, determine matrix, buffer size.
+ * Precompute stage:
+ *    -> setup youngs/poisson/density
+ *    -> setup rest pose information for deformation gradient.
+ *    -> setup previous, current deformation, velocity
+ *    -> setup acceleration solvers, e.g. Projective Dynamics
+ *    -> mark dirichlet boundaries.
+ * Loop stage:
+ *    -> prepare_step: update dbc values, extermal acceleration
+ *    -> compute_step: put result into next_deform
+ *    -> step_next: step all state buffers.
+ * ------------
+ * Some helper functions are available after precompute stage.
+ *    - update_deformation_gradient: update deformation gradient
+ *    - update_energy: update incremental potential's value
+ *    - update_gradients: update incremental potential's value, and its gradient
+ *                        the operation is fused.
+ *    - update_hessian: update its hessian matrix
+ */
 
 // The variational form is :
 //    argmin 1/2 |u - u_inertia|_M^2  + dt^2 E(u)
-template <typename Scalar, typename Device,  //
-          index_t PhysicalDim, index_t TopologyDim, typename ElastModel>
+template <typename Scalar, typename Device,                               //
+          index_t PhysicalDim, index_t TopologyDim, typename ElastModel,  //
+          typename SparseBlas, typename Blas, typename ParImpl>
 class basic_time_step {
 public:
   using scalar_type = Scalar;
@@ -25,9 +53,10 @@ public:
   static constexpr index_t topology_dim = TopologyDim;
   static constexpr index_t dofs_per_node = PhysicalDim;
   static constexpr index_t hessian_nrows = topology_dim * dofs_per_node;
-
-  template <typename Derived, typename SparseBlas, typename Blas, typename ParImpl>
-  using solver = basic_time_step_solver<Derived, Scalar, Device, PhysicalDim, TopologyDim, SparseBlas, Blas, ParImpl>;
+  using blas_ref = mp::blas::basic_blas<Blas, Scalar, Device>&;
+  using const_blas_ref = const mp::blas::basic_blas<Blas, Scalar, Device>&;
+  using par_ref = mp::par::parfor<ParImpl>&;
+  using const_par_ref = const mp::par::parfor<ParImpl>&;
 
   // Each term, can have its own local stiffness matrix, force vector, energy value.
   using local_stiffness = mp::contiguous_view<Scalar, mp::shape_t<hessian_nrows, hessian_nrows>, Device>;
@@ -39,8 +68,8 @@ public:
   using batched_local_force = mp::batched<local_force>;
   using batched_local_energy = mp::contiguous_vector_view<Scalar, Device>;
 
-  using local_stiffness_buffer = mp::to_buffer_t<local_stiffness>;
-  using local_force_buffer = mp::to_buffer_t<local_force>;
+  using local_stiffness_buffer = mp::to_buffer_t<batched_local_stiffness>;
+  using local_force_buffer = mp::to_buffer_t<batched_local_force>;
   using local_energy_buffer = mp::to_buffer_t<batched_local_energy>;
 
   using const_batched_local_stiffness = mp::batched<const_local_matrix>;
@@ -53,14 +82,20 @@ public:
 
   // Mesh
   using mesh_type = basic_unstructured<Scalar, Device, PhysicalDim, TopologyDim>;
+  using host_mesh_type = basic_unstructured<Scalar, mp::device::cpu, PhysicalDim, TopologyDim>;
   using boundary_type = boundary_condition<Scalar, Device, PhysicalDim, TopologyDim, dofs_per_node>;
+  using dof_type_type = mp::contiguous_view<node_boundary_type, mp::shape_t<PhysicalDim>, Device>;
+  using const_dof_type = mp::contiguous_view<const node_boundary_type, mp::shape_t<PhysicalDim>, Device>;
+  using batched_dof_type = mp::batched<dof_type_type>;
+  using const_batched_dof_type = mp::batched<const_dof_type>;
+  using batched_dof_type_buffer = mp::to_buffer_t<batched_dof_type>;
 
   using mesh_view = basic_unstructured_view<Scalar, Device, PhysicalDim, TopologyDim>;
   using vertex_type = typename mesh_type::vertex_type;
   using cell_type = typename mesh_type::cell_type;
   using batched_vertex = typename mesh_type::batched_vertex;
   using batched_cell = typename mesh_type::batched_cell;
-  
+
   using const_mesh_view = basic_unstructured_view<const Scalar, Device, PhysicalDim, TopologyDim>;
   using const_vertex = typename const_mesh_view::vertex_type;
   using const_cell = typename const_mesh_view::cell_type;
@@ -74,22 +109,48 @@ public:
   using rest_volume = mp::contiguous_vector_view<Scalar, Device>;
   using const_rest_volume = mp::contiguous_vector_view<const Scalar, Device>;
   using rest_volume_buffer = mp::to_buffer_t<rest_volume>;
+  using deform_grad_item = mp::contiguous_view<Scalar, mp::shape_t<PhysicalDim, PhysicalDim>, Device>;
+  using deform_grad_type = mp::batched<deform_grad_item>;
+  using deform_grad_buffer = mp::to_buffer_t<deform_grad_type>;
   using dminv_item = mp::contiguous_view<Scalar, mp::shape_t<PhysicalDim, PhysicalDim>, Device>;
   using dminv_type = mp::batched<dminv_item>;
   using dminv_buffer = mp::to_buffer_t<dminv_type>;
   using pfpx_item = mp::contiguous_view<Scalar, mp::shape_t<PhysicalDim * PhysicalDim, hessian_nrows>, Device>;
   using pfpx_type = mp::batched<pfpx_item>;
   using pfpx_buffer = mp::to_buffer_t<pfpx_type>;
+  using def_grad = deformation_gradient<Scalar, Device, physical_dim, topology_dim>;
 
-  explicit basic_time_step(mesh_type mesh) : mesh_(std::move(mesh)) {}
+  ////////////////////////////////////////////////
+  /// Construct stage
+  ////////////////////////////////////////////////
   SSIM_INTERNAL_ENABLE_ALL_CTOR(basic_time_step);
+  explicit basic_time_step(mesh_type mesh,           //
+                           Scalar time_step = 1e-2,  //
+                           Scalar youngs = 1e6, Scalar poisson = 0.33, Scalar density = 1e3) :
+      mesh_(std::move(mesh)), youngs_(youngs), poisson_(poisson), density_(density), time_step_(time_step) {
+    reset();
+  }
 
+  blas_ref blas() noexcept { return blas_; }
+  const_blas_ref blas() const noexcept { return blas_; }
+  par_ref parallel() noexcept { return pf_; }
+  const_par_ref parallel() const noexcept { return pf_; }
+
+  ////////////////////////////////////////////////
+  /// Getter/Setters
+  ////////////////////////////////////////////////
   mesh_view mesh() noexcept { return mesh_.view(); }
   const_mesh_view mesh() const noexcept { return mesh_.view(); }
-  batched_vertex deform() noexcept { return deformation_.view(); }
-  const_batched_vertex deform() const noexcept { return deformation_.view(); }
+  batched_dof_type dof_type() noexcept { return dof_type_.view(); }
+  const_batched_dof_type dof_type() const noexcept { return dof_type_.view(); }
+  batched_vertex dbc_values() noexcept { return dbc_values_.view(); }
+  const_batched_vertex dbc_values() const noexcept { return dbc_values_.view(); }
+  batched_vertex deformation() noexcept { return deformation_.view(); }
+  const_batched_vertex deformation() const noexcept { return deformation_.view(); }
   batched_vertex prev_deform() noexcept { return prev_deform_.view(); }
   const_batched_vertex prev_deform() const noexcept { return prev_deform_.view(); }
+  batched_vertex inertia_deform() noexcept { return inertia_deform_.view(); }
+  const_batched_vertex inertia_deform() const noexcept { return inertia_deform_.view(); }
   batched_vertex next_deform() noexcept { return next_deform_.view(); }
   const_batched_vertex next_deform() const noexcept { return next_deform_.view(); }
   batched_vertex velocity() noexcept { return velocity_.view(); }
@@ -98,8 +159,6 @@ public:
   const_batched_vertex ext_accel() const noexcept { return ext_accel_.view(); }
   batched_vertex forces() noexcept { return forces_.view(); }
   const_batched_vertex forces() const noexcept { return forces_.view(); }
-  boundary_type& boundary() noexcept { return boundary_; }
-  const boundary_type& boundary() const noexcept { return boundary_; }
 
   sys_matrix_view sysmatrix() noexcept { return sysmatrix_.view(); }
   const_sys_matrix_view sysmatrix() const noexcept { return sysmatrix_.view(); }
@@ -107,34 +166,260 @@ public:
   sys_matrix_view mass_matrix() noexcept { return mass_matrix_.view(); }
   const_sys_matrix_view mass_matrix() const noexcept { return mass_matrix_.view(); }
 
-  basic_time_step& set_time_step(Scalar time_step) { time_step_ = time_step; return *this;}
-  basic_time_step& set_youngs(Scalar youngs) { youngs_ = youngs; return *this;}
-  basic_time_step& set_poisson(Scalar poisson) { poisson_ = poisson; return *this;}
-  basic_time_step& set_density(Scalar density) { density_ = density; return *this;}
+  sys_matrix_view mass_matrix_filtered() noexcept { return mass_matrix_filtered_.view(); }
+  const_sys_matrix_view mass_matrix_filtered() const noexcept { return mass_matrix_filtered_.view(); }
 
-  // Reset all the internal states.
-  void reset();
+  basic_time_step& set_time_step(Scalar time_step) {
+    time_step_ = time_step;
+    dirty_ = true;
+    return *this;
+  }
+  basic_time_step& set_youngs(Scalar youngs) {
+    youngs_ = youngs;
+    dirty_ = true;
+    return *this;
+  }
+  basic_time_step& set_poisson(Scalar poisson) {
+    poisson_ = poisson;
+    dirty_ = true;
+    return *this;
+  }
+  basic_time_step& set_density(Scalar density) {
+    density_ = density;
+    dirty_ = true;
+    return *this;
+  }
+
+  ////////////////////////////////////////////////
+  /// Precompute stage helpers
+  ////////////////////////////////////////////////
+  void reset() {
+    SSIM_INTERNAL_CHECK_THROW(youngs_ > 0, std::invalid_argument, "Young's modulus must be positive.");
+    SSIM_INTERNAL_CHECK_THROW(poisson_ > 0 && poisson_ < 0.5, std::invalid_argument,
+                              "Poisson's ratio must be in (0, 0.5).");
+    SSIM_INTERNAL_CHECK_THROW(density_ > 0, std::invalid_argument, "Density must be positive.");
+    using mp::make_buffer;
+    host_mesh_ = mesh_.to(mp::device::cpu{});
+    index_t n_elem = mesh_.num_cells(), n_vert = mesh_.num_vertices();
+
+    if (0.5 - poisson_ < 1e-4) {
+      const double poisson = poisson_;
+      fprintf(stderr, "Warning: got extremely high Poisson's ratio, may cause numerical instability. %lf\n", poisson);
+    }
+
+    {  /// Basic
+      auto zero_buffer = [this]() {
+        auto buf = make_buffer<Scalar, Device>(mesh_.vertices().shape());
+        buf.fill_bytes(0);
+        return buf;
+      };
+      deformation_ = zero_buffer();
+      inertia_deform_ = zero_buffer();
+      prev_deform_ = zero_buffer();
+      next_deform_ = zero_buffer();
+      velocity_ = zero_buffer();
+      forces_ = zero_buffer();
+      temp_buffer_ = zero_buffer();
+    }
+
+    {
+      if (!ext_accel_) {
+        ext_accel_ = make_buffer<Scalar, Device>(mesh_.vertices().shape());
+        ext_accel_.fill_bytes(0);
+      }
+      if (!dbc_values_) {
+        dbc_values_ = make_buffer<Scalar, Device>(mesh_.vertices().shape());
+        dbc_values_.fill_bytes(0);
+      }
+      if (!dof_type_) {
+        dof_type_ = make_buffer<node_boundary_type, Device>(mesh_.vertices().shape());
+        dof_type_.fill_bytes(0);
+      }
+    }
+
+    {  /// Elasticity
+      rest_volume_ = make_buffer<Scalar, Device>(n_elem);
+      dminv_ = make_buffer<Scalar, Device>(n_elem, mp::holder<PhysicalDim>{}, mp::holder<PhysicalDim>{});
+      pfpx_ = make_buffer<Scalar, Device>(n_elem, mp::holder<PhysicalDim * PhysicalDim>{}, mp::holder<hessian_nrows>{});
+      deform_grad_ = make_buffer<Scalar, Device>(n_elem, mp::holder<PhysicalDim>{}, mp::holder<PhysicalDim>{});
+      local_energy_ = make_buffer<Scalar, Device>(n_elem);
+      local_force_ = make_buffer<Scalar, Device>(n_elem, mp::holder<topology_dim>{}, mp::holder<dofs_per_node>{});
+      local_stiffness_ = make_buffer<Scalar, Device>(n_elem, mp::holder<hessian_nrows>{}, mp::holder<hessian_nrows>{});
+    }
+
+    {  /// Deformation gradients
+      def_grad dg(mesh_.const_view());
+      parallel().run(dg.compute_dminv(dminv_.view()));
+      parallel().run(dg.compute_pfpx(pfpx_.view(), dminv_.view()));
+      parallel().run(make_rest_vol_task(mesh_.view(), rest_volume_.view()));
+    }
+
+    auto h_cells = host_mesh_.cells();
+    std::vector<mp::sparse::entry<Scalar>> all_entries;
+    all_entries.reserve(n_elem * hessian_nrows * hessian_nrows);
+
+    {  // Mass
+      auto integrator = mass_integrator(host_mesh_.view(), density_);
+      auto local_mass_buf = mp::make_buffer<Scalar>(n_elem, topology_dim, topology_dim);
+      auto local_mass = local_mass_buf.view();
+      mp::par::seq().run(integrator, local_mass);
+
+      for (index_t elem = 0; elem < n_elem; ++elem) {
+        for (auto [i, j] : mp::make_shape(topology_dim, topology_dim)) {
+          for (auto [i_dof, j_dof] : mp::make_shape(dofs_per_node, dofs_per_node)) {
+            const index_t row = h_cells(elem, i) * dofs_per_node + i_dof;
+            const index_t col = h_cells(elem, j) * dofs_per_node + j_dof;
+            Scalar val = i_dof == j_dof ? local_mass(elem, i, j) : 0;
+            all_entries.emplace_back(row, col, val);
+          }
+        }
+      }
+    }
+    index_t total_dofs = n_vert * dofs_per_node;
+    auto coo = mp::sparse::make_from_triplets<Scalar>(all_entries.begin(), all_entries.end(), total_dofs, total_dofs,
+                                                      mp::sparse::sparse_property::symmetric);
+    auto csr = mp::sparse::make_from_coos<Scalar, mp::sparse::sparse_format::csr>(coo);
+    mass_matrix_ = csr.to(Device{});
+    mass_matrix_filtered_ = csr.to(Device{});
+    sysmatrix_ = csr.to(Device{});
+
+    // Filter DBC.
+    auto vals = dbc_values_.const_view();
+    boundary_type enforce(mesh_.const_view(), dof_type(), vals);
+    enforce.hessian(parallel(), mass_matrix_filtered_.view());
+
+    mass_bl_ = SparseBlas(mass_matrix_.const_view());
+    sys_bl_ = SparseBlas(sysmatrix_.const_view());
+    mass_filtered_bl_ = SparseBlas(mass_matrix_filtered_.const_view());
+
+    {  // Gather Info
+      local_global_composer<Scalar, Device, PhysicalDim, TopologyDim, PhysicalDim> composer;
+      auto mesh = mesh_.const_view();
+      auto rest_volume = rest_volume_.const_view();
+      stress_gather_info_ = composer.force(mesh, rest_volume);
+      hessian_gather_info_ = composer.hessian(mesh, rest_volume);
+    }
+    dirty_ = false;
+  }
+
+  ////////////////////////////////////////////////
+  /// Loop Stage
+  ////////////////////////////////////////////////
+  void prepare_step() {
+    auto inertia = inertia_deform_.view();
+    auto deform = deformation_.view();
+    auto vel = velocity_.view();
+    auto accel = ext_accel_.view();
+    auto solution = next_deform_.view();
+    // 1. u_Predict <- u + dt * v + 0.5 * dt^2 * a
+    mp::copy(inertia, deform);
+    blas().axpy(time_step_, vel, inertia);
+    blas().axpy(0.5 * time_step_ * time_step_, accel, inertia);
+
+    // 2. apply dirichlet boundary conditions.
+    auto vals = dbc_values_.const_view();
+    boundary_type enforce(mesh_.const_view(), dof_type(), vals);
+    enforce.value(parallel(), inertia);
+
+    mp::copy(solution, inertia);  // initialize solution to our prediction.
+  }
+
+  template <typename Algorithm>
+  void compute_step(Algorithm& algo);
+
+  void step_next() {
+    auto next = next_deform_.view();
+    auto prev = prev_deform_.view();
+    auto current = deformation_.view();
+    auto vel = velocity_.view();
+    mp::copy(prev, current);
+    mp::copy(current, next);
+    mp::copy(vel, next);
+    blas().axpy(-1.0, prev, vel);
+    blas().scal(Scalar(1.0) / time_step_, vel);
+  }
+
+  ////////////////////////////////////////////////
+  /// Helpers
+  ////////////////////////////////////////////////
+
+  /// @brief add external force to a specific dof (uniformly.)
+  void add_ext_force_dof(index_t dof_idx, Scalar del) {
+    SSIM_INTERNAL_CHECK_THROW(-PhysicalDim < dof_idx && dof_idx < PhysicalDim, std::invalid_argument,
+                              "|dof_idx| must be less than PhysicalDim.");
+    if (dof_idx < 0) {
+      dof_idx += PhysicalDim;
+    }
+    struct work {
+      index_t dof_idx_;
+      Scalar x_;
+      SSIM_PRIMFUNC void operator()(vertex_type accel) const noexcept { accel[dof_idx_] += x_; }
+    };
+    parallel().vmap(work{dof_idx, del}, ext_accel_);
+  }
+
+  Scalar update_energy_and_gradients() {
+    forces_.fill_bytes(0);
+    auto f = forces_.view();
+
+    /// Inertia Part: 1/2 ||X - X_inertia||_MassFiltered
+    /// => grad = Mass(X - X_inertia)
+    auto inertia = inertia_deform_.view();
+    auto deform = next_deform_.view();
+    auto vel = velocity_.view();
+    auto temp = temp_buffer_.view();
+    blas().copy(temp, deform);
+    blas().axpy(-1.0, inertia, temp);
+    mass_filtered_bl_.gemv(1.0, temp.flatten(), 0.0, f.flatten());
+    Scalar inertia_energy = 0.5 * blas().dot(temp, f);
+
+    /// Elasticity Part: dt^2 grad_X [Energy(F(X))]
+    def_grad dg(mesh_.const_view());
+    auto deform_grad = deform_grad_.view();
+    parallel().run(dg.compute_def_grad(deform_grad, dminv_.view(), deformation_.view()));
+
+    // TODO: svd.
+    auto lambda = elast::compute_lambda(youngs_, poisson_);
+    auto mu = elast::compute_mu(youngs_, poisson_);
+    ElastModel model(lambda, mu);
+    auto local_energy = local_energy_.view();
+    auto local_force = local_force_.view();
+    parallel().vmap(mp::par::make_output_vmapped(model.stress_op()), local_energy, local_force, deform_grad);
+
+    auto n_vert = mesh_.num_vertices(), n_elem = mesh_.num_cells();
+    mp::sparse::basic_gather_operator<Scalar, Device, 1> gather_op{
+      f,                                                          // force on vertices,
+      local_force.reshape(n_elem * topology_dim, dofs_per_node),  // force on elements
+      stress_gather_info_.desc(),                                 // cached gather information
+      time_step_ * time_step_};                                   // alpha = dt^2
+    parallel().run(n_elem, gather_op);
+
+    // Compute energy
+    auto rest_volume = rest_volume_.const_view();
+    Scalar elast_energy = blas().dot(local_energy, rest_volume);
+
+    return inertia_energy + elast_energy * time_step_ * time_step_;
+  }
 
 private:
   /// @brief if the internal states need to be reset due to changes to hyper params.
   //         e.g. timestep, youngs, poisson.
-  bool dirty_;
+  bool dirty_{true};
 
   ////////// Basic //////////
-  Scalar time_step_;           ///< time step size.
-  mesh_type mesh_;             ///< state of the mesh at zero step.
-  vertex_buffer deformation_;  ///< deform at current step.
-  vertex_buffer prev_deform_;  ///< deform at previous step.
-  vertex_buffer next_deform_;  ///< deform at next step, or the intermediate step.
-  vertex_buffer velocity_;     ///< velocity at current step.
-  vertex_buffer ext_accel_;    ///< external acceleration.
-  vertex_buffer forces_;       ///< forces at current step. (Residual of Dynamic System)
-  boundary_type boundary_;     ///< boundary conditions handler.
-  sys_matrix sysmatrix_;       ///< system matrix at current step.
-
-  ////////// Mass //////////
-  Scalar density_;             ///< density. (if uniform)
-  sys_matrix mass_matrix_;     ///< mass matrix.
+  mesh_type mesh_;                    ///< state of the mesh at zero step.
+  host_mesh_type host_mesh_;          ///< host mesh for more efficient computes.
+  batched_dof_type_buffer dof_type_;  ///< boundary indicator
+  vertex_buffer dbc_values_;          ///< dirichlet boundary condition values.
+  vertex_buffer deformation_;         ///< deform at current step.
+  vertex_buffer prev_deform_;         ///< deform at previous step.
+  vertex_buffer inertia_deform_;      ///< deformation with one step inertia term.
+  vertex_buffer next_deform_;         ///< deform at next step, or the intermediate step.
+  vertex_buffer velocity_;            ///< velocity at current step.
+  vertex_buffer ext_accel_;           ///< external acceleration.
+  vertex_buffer forces_;              ///< forces at current step. (Residual of Dynamic System)
+  vertex_buffer temp_buffer_;         ///< temporary buffer for intermediate results.
+  sys_matrix sysmatrix_;              ///< system matrix at current step.
 
   ////////// Elasticity //////////
   Scalar youngs_;                           ///< Young's modulus. (if uniform)
@@ -142,26 +427,28 @@ private:
   rest_volume_buffer rest_volume_;          ///< rest volume of each element.
   dminv_buffer dminv_;                      ///< See "Dynamic Deformables", map x->F
   pfpx_buffer pfpx_;                        ///< derivative of DeformGrad wrt x.
+  deform_grad_buffer deform_grad_;          ///< deformation gradient.
   local_energy_buffer local_energy_;        ///< element local energy
   local_force_buffer local_force_;          ///< element local force
   local_stiffness_buffer local_stiffness_;  ///< element local stiffness matrix
 
-  mp::sparse::basic_gather_info<Scalar, Device> stress_gather_info_;  // gathers stress from elements to nodes.
-};
+  ////////// Mass //////////
+  Scalar density_;                   ///< density. (if uniform)
+  sys_matrix mass_matrix_;           ///< mass matrix.
+  sys_matrix mass_matrix_filtered_;  ///< mass matrix with dirichlet boundary conditions.
 
-template <typename Derived, typename Scalar, typename Device, index_t PhysicalDim, index_t TopologyDim,
-          typename SparseBlas, typename Blas, typename ParImpl>
-class basic_time_step_solver {
-public:
-  using scalar_type = Scalar;
-  using device_type = Device;
-  static constexpr index_t physical_dim = PhysicalDim;
-  static constexpr index_t topology_dim = TopologyDim;
+  mp::sparse::basic_gather_info<Scalar, Device> stress_gather_info_;   // gathers stress from elements to nodes.
+  mp::sparse::basic_gather_info<Scalar, Device> hessian_gather_info_;  // gathers stress from elements to nodes.
 
+  ////////// Time Integration information //////////
+  Scalar time_step_;      ///< time step size.
+  Scalar world_time_{0};  ///< current world time.
+
+  SparseBlas sys_bl_;
+  SparseBlas mass_bl_;
+  SparseBlas mass_filtered_bl_;
+  Blas blas_;
   ParImpl pf_;
-  Blas bl_;
-  std::unique_ptr<SparseBlas> sp_sys_;
 };
-
 
 }  // namespace ssim::fem

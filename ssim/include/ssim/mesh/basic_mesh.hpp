@@ -94,6 +94,17 @@ public:
   auto vertices() noexcept { return vertices_.view(); }
   auto cells() noexcept { return cells_.view(); }
 
+  auto vertices() const noexcept { return vertices_.const_view(); }
+  auto cells() const noexcept { return cells_.const_view(); }
+
+  template <typename Device2>
+  basic_unstructured<Scalar, Device2, PhysicalDim, TopologyDim> to(Device2 /* device */) const {
+    basic_unstructured<Scalar, Device2, PhysicalDim, TopologyDim> result(num_vertices(), num_cells());
+    mp::copy(result.vertices(), vertices());
+    mp::copy(result.cells(), cells());
+    return result;
+  }
+
 private:
   batched_vertex_buffer vertices_;
   batched_cell_buffer cells_;

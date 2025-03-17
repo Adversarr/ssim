@@ -163,12 +163,12 @@ public:
   };
 
   /// @brief create a task to compute inv(Dm) for each element.
-  dminv_task compute_dminv(dminv_type dst) { return {dst, mesh_}; }
+  dminv_task compute_dminv(dminv_type dst) const noexcept { return {dst, mesh_}; }
 
   /// @brief create a task to compute F for each element.
-  pfpx_task compute_pfpx(pfpx_type dst, const_dminv dminv) { return {dst, mesh_, dminv}; }
+  pfpx_task compute_pfpx(pfpx_type dst, const_dminv dminv) const noexcept { return {dst, mesh_, dminv}; }
 
-  def_grad_task compute_def_grad(def_grad_type dst, const_dminv dminv, const_batched_vertex deform) {
+  def_grad_task compute_def_grad(def_grad_type dst, const_dminv dminv, const_batched_vertex deform) const noexcept {
     return {dst, mesh_, dminv, deform};
   }
 

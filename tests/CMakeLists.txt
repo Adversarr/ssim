@@ -14,3 +14,4 @@ endmacro()
 
 SSIM_ADD_TEST(fem_intro)
 SSIM_ADD_TEST(fem_local_global)
+SSIM_ADD_EXECUTABLE(fem_time_step)
