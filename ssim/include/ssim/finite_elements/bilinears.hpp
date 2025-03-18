@@ -136,11 +136,15 @@ struct p1_element_3d {
     jacobi_.col(0) = nodes.col(1) - nodes.col(0);
     jacobi_.col(1) = nodes.col(2) - nodes.col(0);
     jacobi_.col(2) = nodes.col(3) - nodes.col(0);
-    inverse_jacobi_ = jacobi_.inverse();
+    inverse_jacobi_ = jacobi_.inverse().eval();
     det_jacobi_ = abs(jacobi_.determinant());
   }
 
-  SSIM_PRIMFUNC Scalar integrate_f_f(index_t i, index_t j) const noexcept { return det_jacobi_ * p13_f_f[i][j]; }
+  SSIM_PRIMFUNC Scalar integrate_f_f(index_t i, index_t j) const noexcept { 
+    assert(0 <= i && i < 4);
+    assert(0 <= j && j < 4);
+    return det_jacobi_ * p13_f_f[i][j];
+  }
 
   SSIM_PRIMFUNC Scalar integrate_pf_f(index_t i, index_t j, index_t i_pf) const noexcept {
     Scalar pfi_pu = p13_pfpx_f[0][i_pf][j];
@@ -238,7 +242,7 @@ struct linear_element_integrator
       }
     }
 
-    result = result * weight;
+    result = result * weight * alpha_;
     cmap(dst) += result;
   }
 };

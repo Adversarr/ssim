@@ -131,4 +131,16 @@ tet_mesh<Scalar, mp::device::cpu> unit_box(index_t nx = 2, index_t ny = 2, index
   return mesh;
 }
 
+template <typename Scalar>
+tet_mesh<Scalar, mp::device::cpu> tetra() {
+  tet_mesh<Scalar, mp::device::cpu> mesh(4, 1);
+  auto vert = mp::eigen_support::cmap(mesh.vertices());
+  auto elem = mp::eigen_support::cmap(mesh.cells());
+  vert.col(0) = Eigen::Vector<Scalar, 3>{0, 0, 0};
+  vert.col(1) = Eigen::Vector<Scalar, 3>{1, 0, 0};
+  vert.col(2) = Eigen::Vector<Scalar, 3>{0, 1, 0};
+  vert.col(3) = Eigen::Vector<Scalar, 3>{0, 0, 1};
+  elem.col(0) = Eigen::Vector<index_t, 4>{0, 1, 2, 3};
+  return mesh;
+}
 }  // namespace ssim::mesh

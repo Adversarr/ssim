@@ -192,17 +192,17 @@ public:
     SSIM_PRIMFUNC explicit hessian_operator(Derived model) : model_(model) {}
     SSIM_INTERNAL_ENABLE_ALL_CTOR(hessian_operator);
 
-    SSIM_PRIMFUNC scalar_type operator()(const hessian_type& out,      //
+    SSIM_PRIMFUNC void operator()(const hessian_type& out,      //
                                          const def_grad_type& F,       //
                                          const svd_matrix_type& U,     //
                                          const svd_sigma_type& sigma,  //
                                          const svd_matrix_type& V) const noexcept {
-      return model_.hessian(out, F, U, sigma, V);
+      model_.hessian(out, F, U, sigma, V);
     }
 
-    SSIM_PRIMFUNC scalar_type operator()(const hessian_type& out,  //
+    SSIM_PRIMFUNC void operator()(const hessian_type& out,  //
                                          const def_grad_type& F) const noexcept {
-      return model_.hessian(out, F, {}, {}, {});
+      model_.hessian(out, F, {}, {}, {});
     }
 
     Derived model_;

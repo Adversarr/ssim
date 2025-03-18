@@ -43,23 +43,25 @@ public:
   };
 
   struct zero_grads_impl {
-    SSIM_PRIMFUNC void operator()(const vertex_type& grads,  //
-                                  const dof_type_type& dof_type) const noexcept {
-      for (index_t i = 0; i < DofsPerNode; ++i) {
-        if (dof_type(i) == node_boundary_type::dirichlet) {
-          grads(i) = 0;
-        }
+    SSIM_PRIMFUNC void operator()(Scalar& grads, node_boundary_type dof_type) const noexcept {
+      if (dof_type == node_boundary_type::dirichlet) {
+        grads = Scalar(0);
       }
     }
   };
 
   struct identity_hessian_impl {
     const_batched_dof_type dof_type_;
-    SSIM_PRIMFUNC void operator()(index_t i, index_t j, Scalar val) {
-      auto itype = dof_type_(mp::ind2sub(dof_type_.shape(), i));
-      auto jtype = dof_type_(mp::ind2sub(dof_type_.shape(), j));
-      if (itype == node_boundary_type::dirichlet && jtype == node_boundary_type::dirichlet) {
-        val = i == j ? 1 : 0;
+    SSIM_PRIMFUNC void operator()(index_t i, index_t j, Scalar& val) const noexcept {
+      auto itype = dof_type_(i / dofs_per_node, i % dofs_per_node);
+      auto jtype = dof_type_(j / dofs_per_node, j % dofs_per_node);
+      if (itype == node_boundary_type::dirichlet || jtype == node_boundary_type::dirichlet) {
+        // val = i == j ? 1 : 0;
+        if (i == j) {
+          val = Scalar(1);
+        } else {
+          val = Scalar(0);
+        }
       }
     }
   };
@@ -86,7 +88,7 @@ public:
   template <typename ParImpl>
   void grads(const mp::par::parfor<ParImpl>& pf, batched_value grads) {
     auto zero_grads = zero_grads_impl{};
-    pf.vmap(zero_grads, grads, node_type_);
+    pf.vmap(zero_grads, grads.flatten(), node_type_.flatten());
   }
 
   /// @brief Set the hessian of dirichlet boundaries to identity.

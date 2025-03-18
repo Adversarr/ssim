@@ -44,12 +44,12 @@ public:
     dm.col(0) = x1 - x0;
     dm.col(1) = x2 - x0;
     if constexpr (PhysicalDim == 2) {
-      out = dm.determinant() / 2;
+      out = abs(dm.determinant() / 2);
     } else {
       index_t l = cell[3];
       auto x3 = cmap(vert[l]);
       dm.col(2) = x3 - x0;
-      out = dm.determinant() / 6;
+      out = abs(dm.determinant() / 6);
     }
   }
 

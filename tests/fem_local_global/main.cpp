@@ -106,15 +106,15 @@ GTEST_TEST(gather, 3d) {
 
   auto gather_stress = composer.force(line.const_view(), cell_values);
   mp::sparse::basic_gather_operator<float, mp::device::cpu, 1> gather_stress_operator(
-      stress_on_nodes, stress_on_elements.reshape(nE * 4, 3_s), gather_stress.desc());
-  seq.run(nV, gather_stress_operator);
+      stress_on_nodes, stress_on_elements.reshape(nE * 4, 3_s), gather_stress.desc(), 0.2);
+  seq.run(gather_stress_operator);
   auto cell = line.cells();
   Eigen::Matrix3Xf gt = Eigen::Matrix3Xf::Zero(3, nV);
 
   for (index_t i = 0; i < nE; ++i) {
     for (index_t j = 0; j < 4; ++j) {
       for (index_t k = 0; k < 3; ++k) {
-        gt(k, cell(i, j)) += stress_on_elements(i, j, k) * cell_values(i);
+        gt(k, cell(i, j)) += stress_on_elements(i, j, k) * cell_values(i) * 0.2;
       }
     }
   }
