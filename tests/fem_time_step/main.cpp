@@ -2,26 +2,32 @@
 #include <iostream>
 
 #include "mathprim/blas/cpu_eigen.hpp"
+#include "mathprim/linalg/direct/eigen_support.hpp"
+#include "mathprim/parallel/openmp.hpp"
 #include "mathprim/sparse/blas/eigen.hpp"
+#include "mathprim/supports/stringify.hpp"
 #include "ssim/elast/linear.hpp"
 #include "ssim/elast/stable_neohookean.hpp"
-#include "mathprim/linalg/direct/eigen_support.hpp"
 #include "ssim/finite_elements/backward_euler.hpp"
 #include "ssim/finite_elements/time_step.hpp"
 #include "ssim/mesh/common_shapes.hpp"
-#include "mathprim/supports/stringify.hpp"
 
 using namespace ssim;
 using namespace mathprim;
 
 int main() {
   using Scalar = double;
-  // auto mesh = mesh::unit_box<Scalar>(2, 2, 2);
-  auto mesh = mesh::tetra<Scalar>();
+#ifdef NDEBUG
+  index_t nx = 16;  // nx**3 vert.
+#else
+  index_t nx = 2;
+#endif
+  auto mesh = mesh::unit_box<Scalar>(nx, nx, nx);
+  // auto mesh = mesh::tetra<Scalar>();
   using ElastModel = elast::stable_neohookean<Scalar, device::cpu, 3>;
   using SparseBlas = sparse::blas::eigen<Scalar, sparse::sparse_format::csr>;
   using Blas = blas::cpu_eigen<Scalar>;
-  using ParImpl = par::seq;
+  using ParImpl = par::openmp;
 
   fem::basic_time_step<Scalar, device::cpu, 3, 4, ElastModel, SparseBlas, Blas, ParImpl> step{std::move(mesh), 1e-2,
                                                                                               1e7, 0.33, 1};
@@ -45,7 +51,7 @@ int main() {
   });
   par::seq().run(t);
   step.update_hessian();
-  std::cout << eigen_support::map(step.sysmatrix()).toDense() << std::endl;
+  // std::cout << eigen_support::map(step.sysmatrix()).toDense() << std::endl;
   std::cout << "Mass: " << total / 3 << std::endl;
   std::cout << "Threshold: " << step.grad_convergence_threshold_abs() << std::endl;
   Solver solver(step.sysmatrix().as_const());
@@ -54,7 +60,7 @@ int main() {
   for (index_t i = 0; i < 2000; ++i) {
     step.prepare_step();
     std::cout << "========== Step " << i << " ==========" << std::endl;
-    std::cout << "Deformation:\n" << eigen_support::cmap(step.deformation()) << std::endl;
+    // std::cout << "Deformation:\n" << eigen_support::cmap(step.deformation()) << std::endl;
     std::cout << "Energy: " << step.update_energy_and_gradients() << std::endl;
     // std::cout << "Force:\n" << eigen_support::cmap(step.forces()) << std::endl;
     // auto force = step.forces();

@@ -77,10 +77,7 @@ public:
     problem.setup();
     optimizer.stopping_criteria_.tol_grad_ = s.grad_convergence_threshold_abs();
     optimizer.stopping_criteria_.max_iterations_ = 1000;
-    optimizer.optimize(problem, [](auto result) {
-      std::cout << "Iter[" << result.iterations_ << "]: loss=" << result.value_ << ", |g|=" << result.grad_norm_
-                << std::endl;
-    });
+    optimizer.optimize(problem);
   }
 
   template <typename Scalar, typename Device,                               //

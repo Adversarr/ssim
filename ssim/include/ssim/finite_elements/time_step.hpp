@@ -462,13 +462,14 @@ public:
     }
 
     {  // convergence criteria
-      auto tmp = temp_buffer_.view();
-      auto tmp2 = inertia_deform_.view();  // fuse.
-      temp_buffer_.fill_bytes(0);
-      inertia_deform_.fill_bytes(0);
-      parallel().vmap(dof_mod_work(0, time_step_ * time_step_), tmp);
-      mass_bl_.gemv(1.0, tmp.flatten(), 0.0, tmp2.flatten());
-      Scalar body_force = blas().norm(tmp2);
+      // auto tmp = temp_buffer_.view();
+      // auto tmp2 = inertia_deform_.view();  // fuse.
+      // temp_buffer_.fill_bytes(0);
+      // inertia_deform_.fill_bytes(0);
+      // parallel().vmap(dof_mod_work(0, time_step_ * time_step_), tmp);
+      // mass_bl_.gemv(1.0, tmp.flatten(), 0.0, tmp2.flatten());
+      // Scalar body_force = blas().norm(tmp2);
+      Scalar body_force = blas().asum(mass_matrix().values()) / dofs_per_node;
       gradient_convergence_threshold_abs_ = body_force * gradient_convergence_threshold_;
     }
     solver.reset(*this);
