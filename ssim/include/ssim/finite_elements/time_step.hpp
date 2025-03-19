@@ -5,6 +5,7 @@
 #include <mathprim/sparse/basic_sparse.hpp>
 #include <mathprim/sparse/cvt.hpp>
 #include <mathprim/sparse/gather.hpp>
+#include <mathprim/optim/basic_optim.hpp>
 #include <stdexcept>
 
 #include "boundary.hpp"
@@ -248,6 +249,7 @@ public:
   struct dof_mod_work {
     index_t dof_idx_;
     Scalar x_;
+    dof_mod_work(index_t dof_idx, Scalar x) : dof_idx_(dof_idx), x_(x) {}
     SSIM_PRIMFUNC void operator()(vertex_type accel) const noexcept { accel[dof_idx_] += x_; }
   };
 
@@ -702,6 +704,54 @@ public:
   void reset_impl(basic_time_step<Scalar, Device, PhysicalDim, TopologyDim, ElastModel, SparseBlas, Blas, ParImpl>&) {
     // nothing to reset.
   }
+};
+
+
+template <typename Scalar, typename Device,                               //
+          index_t PhysicalDim, index_t TopologyDim, typename ElastModel,  //
+          typename SparseBlas, typename Blas, typename ParImpl>
+class variational_problem
+    : public mp::optim::basic_problem<
+          variational_problem<Scalar, Device, PhysicalDim, TopologyDim, ElastModel, SparseBlas, Blas, ParImpl>, Scalar,
+          Device> {
+  using base = mp::optim::basic_problem<variational_problem, Scalar, Device>;
+  friend base;
+
+public:
+  using timestep_type
+      = basic_time_step<Scalar, Device, PhysicalDim, TopologyDim, ElastModel, SparseBlas, Blas, ParImpl>;
+  timestep_type& step_;
+
+  explicit variational_problem(timestep_type& step) : step_(step) {
+    base::register_parameter(step_.next_deform().flatten());
+  }
+  variational_problem(const variational_problem&) = delete;
+  variational_problem& operator=(const variational_problem&) = delete;
+  variational_problem(variational_problem&&) = delete;
+  variational_problem& operator=(variational_problem&&) = delete;
+  ~variational_problem() { std::cout << "Total Evaluations: " << cnt_ << std::endl; }
+
+  using const_sparse = typename timestep_type::const_sys_matrix_view;
+
+  std::pair<bool, const_sparse> eval_hessian_impl() {
+    step_.update_hessian(false, true);
+    ++cnt_;
+    return {true, step_.sysmatrix().as_const()};
+  }
+protected:
+  void on_setup() { cnt_ = 0; }
+
+  void eval_value_and_gradients_impl() {
+    auto dst = base::at(0).gradient();
+    base::accumulate_loss(step_.update_energy_and_gradients(false));
+    mp::copy(dst, step_.forces().flatten());
+    ++cnt_;
+  }
+
+  void eval_value_impl() { eval_value_and_gradients_impl(); }
+  void eval_gradients_impl() { eval_value_and_gradients_impl(); }
+
+  index_t cnt_ = 0;
 };
 
 }  // namespace ssim::fem

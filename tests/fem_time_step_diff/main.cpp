@@ -8,7 +8,6 @@
 #include "ssim/elast/linear.hpp"
 #include "ssim/elast/stable_neohookean.hpp"
 #include "mathprim/linalg/direct/eigen_support.hpp"
-#include "ssim/finite_elements/backward_euler.hpp"
 #include "ssim/finite_elements/time_step.hpp"
 #include "ssim/mesh/common_shapes.hpp"
 #include "mathprim/supports/stringify.hpp"
