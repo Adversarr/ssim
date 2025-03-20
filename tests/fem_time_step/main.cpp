@@ -20,38 +20,38 @@ using namespace mathprim;
 int main() {
   using Scalar = double;
 #ifdef NDEBUG
-  index_t nx = 4;  // nx**3 vert.
+  index_t nx = 20;  // nx**3 vert.
 #else
-  index_t nx = 2;
+  index_t nx = 6;
 #endif
   auto mesh = mesh::unit_box<Scalar>(nx, nx, nx);
   // auto mesh = mesh::tetra<Scalar>();
   using ElastModel = elast::stable_neohookean<Scalar, device::cpu, 3>;
   using SparseBlas = sparse::blas::eigen<Scalar, sparse::sparse_format::csr>;
   using Blas = blas::cpu_eigen<Scalar>;
-  using ParImpl = par::seq;
+  using ParImpl = par::openmp;
 
   fem::basic_time_step<Scalar, device::cpu, 3, 4, ElastModel, SparseBlas, Blas, ParImpl> step{std::move(mesh), 1e-2,
                                                                                               1e6, 0.4, 100};
+  step.parallel().derived().set_threshold(1);
   auto dbc = fem::node_boundary_type::dirichlet;
-  step.dof_type()(0, 0) = dbc;
-  step.dof_type()(0, 1) = dbc;
-  step.dof_type()(0, 2) = dbc;
-  // step.dof_type()(1, 0) = dbc;
-  // step.dof_type()(1, 1) = dbc;
-  // step.dof_type()(1, 2) = dbc;
-
+  for (index_t i = 0 ; i < nx; ++ i) {
+    step.dof_type()(i, 0) = dbc;
+    step.dof_type()(i, 1) = dbc;
+    step.dof_type()(i, 2) = dbc;
+    break;
+  }
   // External forces.
-  using Solver = mp::sparse::direct::eigen_simplicial_ldlt<Scalar, mathprim::sparse::sparse_format::csr>;
-  // using Solver = mp::sparse::iterative::cg<Scalar, device::cpu, sparse::blas::eigen<Scalar, sparse::sparse_format::csr>, 
-  //                                          blas::cpu_eigen<Scalar>>;
+  // using Solver = mp::sparse::direct::eigen_simplicial_llt<Scalar, mathprim::sparse::sparse_format::csr>;
+  using Solver = mp::sparse::iterative::cg<Scalar, device::cpu, sparse::blas::eigen<Scalar, sparse::sparse_format::csr>,
+                                           blas::cpu_eigen<Scalar>>;
   // using EigenSolver = Eigen::Sparse
   step.add_ext_force_dof(1, -9.8);
   // fem::time_step_solver_lbfgs ts_solve;
   fem::time_step_solver_backward_euler<Solver> ts_solve;
   step.set_threshold(1e-3);
   step.reset(ts_solve);
-  Scalar total = 0;
+    Scalar total = 0;
   auto t = step.mass_matrix().visit([&total](index_t /* row */, index_t /* col */, auto& value) {
     total += value;
   });
@@ -64,7 +64,9 @@ int main() {
   auto x_buf = make_buffer<Scalar>(step.forces().shape());
   auto x = x_buf.view();
 
-  for (index_t i = 0; i < 200; ++i) {
+  index_t total_step = 200;
+  auto start = std::chrono::high_resolution_clock::now();
+  for (index_t i = 0; i < total_step; ++i) {
     step.prepare_step();
     std::cout << "========== Step " << i << " ==========" << std::endl;
     std::cout << "Energy: " << step.update_energy_and_gradients() << std::endl;
@@ -90,6 +92,12 @@ int main() {
     std::ofstream out_file("deform_" + std::to_string(i) + ".npy", std::ios::binary);
     writer.write(out_file, x);
   }
+  auto end = std::chrono::high_resolution_clock::now();
+  std::cout << "Total time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms"
+            << std::endl;
+  std::cout << "Average time: "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() / total_step << "ms"
+            << std::endl;
 
   return EXIT_SUCCESS;
 }

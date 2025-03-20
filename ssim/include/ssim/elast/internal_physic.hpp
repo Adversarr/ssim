@@ -85,18 +85,22 @@ SSIM_PRIMFUNC void compute_pfpx_2(const Eigen::Matrix<Scalar, 2, 2>& DmInv, Out&
   const Scalar t2 = -n - q;
   // Eigen::Matrix<Scalar, 4, 6> pf_px;
   // pf_px.setZero();
-  pf_px(0, 0) = t1;
-  pf_px(0, 2) = m;
-  pf_px(0, 4) = p;
-  pf_px(1, 1) = t1;
-  pf_px(1, 3) = m;
-  pf_px(1, 5) = p;
-  pf_px(2, 0) = t2;
-  pf_px(2, 2) = n;
-  pf_px(2, 4) = q;
-  pf_px(3, 1) = t2;
-  pf_px(3, 3) = n;
-  pf_px(3, 5) = q;
+#define Fij(i, j) ((i) * 2 + (j))
+#define Xij(i, j) ((j) * 2 + (i))
+  pf_px(Fij(0,0), Xij(0,0)) = t1;
+  pf_px(Fij(0,0), Xij(0,1)) = m;
+  pf_px(Fij(0,0), Xij(0,2)) = p;
+  pf_px(Fij(1,0), Xij(1,0)) = t1;
+  pf_px(Fij(1,0), Xij(1,1)) = m;
+  pf_px(Fij(1,0), Xij(1,2)) = p;
+  pf_px(Fij(0,1), Xij(0,0)) = t2;
+  pf_px(Fij(0,1), Xij(0,1)) = n;
+  pf_px(Fij(0,1), Xij(0,2)) = q;
+  pf_px(Fij(1,1), Xij(1,0)) = t2;
+  pf_px(Fij(1,1), Xij(1,1)) = n;
+  pf_px(Fij(1,1), Xij(1,2)) = q;
+#undef Fij
+#undef Xij
 }
 
 template <typename Scalar, typename Out>
@@ -113,44 +117,46 @@ SSIM_PRIMFUNC void compute_pfpx_3(const Eigen::Matrix<Scalar, 3, 3>& DmInv, Out&
   const Scalar t1 = -m - p - s;
   const Scalar t2 = -n - q - t;
   const Scalar t3 = -o - r - u;
-  // Eigen::Matrix<Scalar, 9, 12> pf_px;
-  // pf_px.setZero();
-  pf_px(0, 0) = t1;
-  pf_px(0, 3) = m;
-  pf_px(0, 6) = p;
-  pf_px(0, 9) = s;
-  pf_px(1, 1) = t1;
-  pf_px(1, 4) = m;
-  pf_px(1, 7) = p;
-  pf_px(1, 10) = s;
-  pf_px(2, 2) = t1;
-  pf_px(2, 5) = m;
-  pf_px(2, 8) = p;
-  pf_px(2, 11) = s;
-  pf_px(3, 0) = t2;
-  pf_px(3, 3) = n;
-  pf_px(3, 6) = q;
-  pf_px(3, 9) = t;
-  pf_px(4, 1) = t2;
-  pf_px(4, 4) = n;
-  pf_px(4, 7) = q;
-  pf_px(4, 10) = t;
-  pf_px(5, 2) = t2;
-  pf_px(5, 5) = n;
-  pf_px(5, 8) = q;
-  pf_px(5, 11) = t;
-  pf_px(6, 0) = t3;
-  pf_px(6, 3) = o;
-  pf_px(6, 6) = r;
-  pf_px(6, 9) = u;
-  pf_px(7, 1) = t3;
-  pf_px(7, 4) = o;
-  pf_px(7, 7) = r;
-  pf_px(7, 10) = u;
-  pf_px(8, 2) = t3;
-  pf_px(8, 5) = o;
-  pf_px(8, 8) = r;
-  pf_px(8, 11) = u;
+#define Fij(i, j) ((i) * 3 + (j))
+#define Xij(i, j) ((j) * 3 + (i))
+  pf_px(Fij(0,0), Xij(0,0)) = t1;
+  pf_px(Fij(0,0), Xij(0,1)) = m;
+  pf_px(Fij(0,0), Xij(0,2)) = p;
+  pf_px(Fij(0,0), Xij(0,3)) = s;
+  pf_px(Fij(1,0), Xij(1,0)) = t1;
+  pf_px(Fij(1,0), Xij(1,1)) = m;
+  pf_px(Fij(1,0), Xij(1,2)) = p;
+  pf_px(Fij(1,0), Xij(1,3)) = s;
+  pf_px(Fij(2,0), Xij(2,0)) = t1;
+  pf_px(Fij(2,0), Xij(2,1)) = m;
+  pf_px(Fij(2,0), Xij(2,2)) = p;
+  pf_px(Fij(2,0), Xij(2,3)) = s;
+  pf_px(Fij(0,1), Xij(0,0)) = t2;
+  pf_px(Fij(0,1), Xij(0,1)) = n;
+  pf_px(Fij(0,1), Xij(0,2)) = q;
+  pf_px(Fij(0,1), Xij(0,3)) = t;
+  pf_px(Fij(1,1), Xij(1,0)) = t2;
+  pf_px(Fij(1,1), Xij(1,1)) = n;
+  pf_px(Fij(1,1), Xij(1,2)) = q;
+  pf_px(Fij(1,1), Xij(1,3)) = t;
+  pf_px(Fij(2,1), Xij(2,0)) = t2;
+  pf_px(Fij(2,1), Xij(2,1)) = n;
+  pf_px(Fij(2,1), Xij(2,2)) = q;
+  pf_px(Fij(2,1), Xij(2,3)) = t;
+  pf_px(Fij(0,2), Xij(0,0)) = t3;
+  pf_px(Fij(0,2), Xij(0,1)) = o;
+  pf_px(Fij(0,2), Xij(0,2)) = r;
+  pf_px(Fij(0,2), Xij(0,3)) = u;
+  pf_px(Fij(1,2), Xij(1,0)) = t3;
+  pf_px(Fij(1,2), Xij(1,1)) = o;
+  pf_px(Fij(1,2), Xij(1,2)) = r;
+  pf_px(Fij(1,2), Xij(1,3)) = u;
+  pf_px(Fij(2,2), Xij(2,0)) = t3;
+  pf_px(Fij(2,2), Xij(2,1)) = o;
+  pf_px(Fij(2,2), Xij(2,2)) = r;
+  pf_px(Fij(2,2), Xij(2,3)) = u;
+#undef Fij
+#undef Xij
 }
 
 }  // namespace ssim::elast::internal

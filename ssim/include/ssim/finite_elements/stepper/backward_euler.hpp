@@ -44,7 +44,9 @@ public:
       return problem.eval_hessian_impl();
     });
 
-    optimizer.optimize(problem);
+    std::cout << optimizer.optimize(problem, [](auto info) {
+      std::cout << info << std::endl;
+    }) << std::endl;;
   }
 
   template <typename Scalar, typename Device,                               //

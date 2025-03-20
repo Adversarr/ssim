@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <mathprim/parallel/openmp.hpp>
 
 #include "mathprim/blas/cpu_eigen.hpp"
 #include "mathprim/sparse/blas/eigen.hpp"
@@ -19,17 +20,16 @@ GTEST_TEST(diff, tetra) {
   using Scalar = double;
   // auto mesh = mesh::unit_box<Scalar>(2, 2, 2);
   auto mesh = mesh::tetra<Scalar>();
-  using ElastModel = elast::linear<Scalar, device::cpu, 3>;
+  using ElastModel = elast::stable_neohookean<Scalar, device::cpu, 3>;
   using SparseBlas = sparse::blas::eigen<Scalar, sparse::sparse_format::csr>;
   using Blas = blas::cpu_eigen<Scalar>;
   using ParImpl = par::seq;
   Scalar dt = 1e-2;
-  fem::basic_time_step<Scalar, device::cpu, 3, 4, ElastModel, SparseBlas, Blas, ParImpl> step{std::move(mesh), dt};
+  fem::basic_time_step<Scalar, device::cpu, 3, 4, ElastModel, SparseBlas, Blas, ParImpl> step{std::move(mesh), dt, 1e6, 0.33, 0};
   // auto dbc = fem::node_boundary_type::dirichlet;
   // step.dof_type()(0, 0) = dbc;
   // step.dof_type()(0, 1) = dbc;
   // step.dof_type()(0, 2) = dbc;
-
   auto deform = eigen_support::cmap(step.next_deform());
   deform(0, 0) = -0.1;
   deform(1, 0) = -0.1;
@@ -48,7 +48,7 @@ GTEST_TEST(diff, tetra) {
   step.update_energy_and_gradients();
 
   // Test if finite diff of energy is gradient.
-  Scalar delta = 1e-3;
+  Scalar delta = 1e-4;
   auto grad = eigen_support::cmap(step.forces()).eval();
   auto finite_diff_grad = grad.eval();
   for (index_t vi = 0; vi < 4; ++vi) {
@@ -64,12 +64,13 @@ GTEST_TEST(diff, tetra) {
   }
   EXPECT_NEAR((finite_diff_grad - grad).squaredNorm(), 0.0, 1e-4);
 
+  
   deform = backup;
   step.update_energy_and_gradients();
   step.update_hessian();
   auto hessian = eigen_support::map(step.sysmatrix()).toDense().eval();
   auto hessian_fd = hessian.eval();
-
+  
   for (index_t vi = 0; vi < 4; ++vi) {
     for (index_t dof = 0; dof < 3; ++dof) {
       // If gradient is correct, directly derive it from gradient.
@@ -94,13 +95,13 @@ GTEST_TEST(diff, tetra) {
 GTEST_TEST(diff, unit_box) {
   using Scalar = double;
   // auto mesh = mesh::unit_box<Scalar>(2, 2, 2);
-  auto mesh = mesh::unit_box<Scalar>();
-  using ElastModel = elast::linear<Scalar, device::cpu, 3>;
+  auto mesh = mesh::unit_box<Scalar>(7,7,7);
+  using ElastModel = elast::stable_neohookean<Scalar, device::cpu, 3>;
   using SparseBlas = sparse::blas::eigen<Scalar, sparse::sparse_format::csr>;
   using Blas = blas::cpu_eigen<Scalar>;
-  using ParImpl = par::seq;
+  using ParImpl = par::openmp;
   Scalar dt = 1e-2;
-  fem::basic_time_step<Scalar, device::cpu, 3, 4, ElastModel, SparseBlas, Blas, ParImpl> step{std::move(mesh), dt};
+  fem::basic_time_step<Scalar, device::cpu, 3, 4, ElastModel, SparseBlas, Blas, ParImpl> step{std::move(mesh), dt, 1e6, 0.33, 0};
   // auto dbc = fem::node_boundary_type::dirichlet;
   // step.dof_type()(0, 0) = dbc;
   // step.dof_type()(0, 1) = dbc;
@@ -116,10 +117,9 @@ GTEST_TEST(diff, unit_box) {
   Scalar energy0 = step.update_energy_and_gradients();
   std::cout << "Energy: " << energy0 << std::endl;
   // Test if finite diff of energy is gradient.
-  Scalar delta = 1e-3;
+  Scalar delta = 1e-4;
   auto grad = eigen_support::cmap(step.forces()).eval();
   auto finite_diff_grad = grad.eval();
-  std::cout << grad << std::endl;
   for (index_t vi = 0; vi < step.mesh().num_vertices(); ++vi) {
     for (index_t dof = 0; dof < 3; ++dof) {
       deform = backup;
@@ -158,5 +158,15 @@ GTEST_TEST(diff, unit_box) {
   }
   std::cout << hessian.topLeftCorner(6, 6) << std::endl;
   std::cout << hessian_fd.topLeftCorner(6, 6) << std::endl;
+
+  auto total = step.mesh().num_vertices() * 3;
+  for (index_t i = 0; i < total; ++i) {
+    for (index_t j = 0; j < total; ++j) {
+      if (std::abs(hessian(i, j) - hessian_fd(i, j)) > 1e-4) {
+        std::cout << i << " " << j << " " << hessian(i, j) << " " << hessian_fd(i, j) << std::endl;
+      }
+    }
+  }
+
   EXPECT_NEAR((hessian_fd - hessian).squaredNorm(), 0.0, 1e-4);
 }

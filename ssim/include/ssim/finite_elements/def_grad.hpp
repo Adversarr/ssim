@@ -111,15 +111,15 @@ public:
       using mp::eigen_support::view;
       auto vert = mesh.vertices();
       index_t i = cell[0], j = cell[1], k = cell[2];
-      auto x0 = cmap(vert[i]) + cmap(deform_[i]);
-      auto x1 = cmap(vert[j]) + cmap(deform_[j]);
-      auto x2 = cmap(vert[k]) + cmap(deform_[k]);
+      auto x0 = (cmap(vert[i]) + cmap(deform_[i])).eval();
+      auto x1 = (cmap(vert[j]) + cmap(deform_[j])).eval();
+      auto x2 = (cmap(vert[k]) + cmap(deform_[k])).eval();
       mat dm;
       dm.col(0) = x1 - x0;
       dm.col(1) = x2 - x0;
       if constexpr (PhysicalDim == 3) {
         index_t l = cell[3];
-        auto x3 = cmap(vert[l]) + cmap(deform_[l]);
+        auto x3 = (cmap(vert[l]) + cmap(deform_[l])).eval();
         dm.col(2) = x3 - x0;
       }
       cmap(dst_elem).transpose() = dm * cmap(dminv_elem).transpose();
@@ -145,7 +145,6 @@ public:
 
     SSIM_PRIMFUNC void operator()(pfpx_item pfpx, const_dminv_item dminv_elem) const noexcept {
       using mp::eigen_support::cmap;
-      using mp::eigen_support::view;
       for (auto [i, j] : pfpx.shape()) {
         pfpx(i, j) = 0;
       }

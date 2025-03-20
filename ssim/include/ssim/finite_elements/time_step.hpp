@@ -43,14 +43,15 @@ struct wrapped_pfpx {
     // note: the shape dim in comment assumes 3d applications.
     using local_mat = Eigen::Matrix<Scalar, elem_hes_nrows, elem_hes_nrows>;
     local_mat temp_buf;  // [9, 9]
-    auto temp = mp::eigen_support::view(temp_buf);
+    temp_buf.setZero();
+    auto temp = mp::eigen_support::view<Device>(temp_buf);
     op_(temp, F);
     auto pfpx_eigen = mp::eigen_support::cmap(pfpx);  // [12, 9]
     auto dst_eigen = mp::eigen_support::cmap(dst);    // [12, 12]
     if (make_spsd_) {
       Eigen::SelfAdjointEigenSolver<local_mat> solve_eigen(temp_buf);
-      auto eigvals = solve_eigen.eigenvalues().cwiseMax(0).eval();
-      auto eigvecs = solve_eigen.eigenvectors().eval();
+      auto eigvals = solve_eigen.eigenvalues().cwiseMax(1e-3).eval();
+      const auto& eigvecs = solve_eigen.eigenvectors();
 
       temp_buf = eigvecs * eigvals.asDiagonal() * eigvecs.transpose();
     }
@@ -293,6 +294,14 @@ public:
   batched_vertex forces() noexcept { return forces_.view(); }
   const_batched_vertex forces() const noexcept { return forces_.view(); }
 
+  auto dminv() noexcept { return dminv_.view(); }
+  auto dminv() const noexcept { return dminv_.view(); }
+  auto local_stiff() noexcept { return local_stiffness_.view(); }
+  auto local_stiff() const noexcept { return local_stiffness_.view(); }
+  auto rest_vol() noexcept { return rest_volume_.view(); }
+  auto rest_vol() const noexcept { return rest_volume_.view(); }
+  
+
   sys_matrix_view sysmatrix() noexcept { return sysmatrix_.view(); }
   const_sys_matrix_view sysmatrix() const noexcept { return sysmatrix_.view(); }
 
@@ -353,10 +362,10 @@ public:
   }
   template <typename Algorithm = time_step_solver_nothing>
   void reset(basic_time_step_solver<Algorithm>& solver) {
-    SSIM_INTERNAL_CHECK_THROW(youngs_ > 0, std::invalid_argument, "Young's modulus must be positive.");
+    SSIM_INTERNAL_CHECK_THROW(youngs_ >= 0, std::invalid_argument, "Young's modulus must be positive.");
     SSIM_INTERNAL_CHECK_THROW(poisson_ > 0 && poisson_ < 0.5, std::invalid_argument,
                               "Poisson's ratio must be in (0, 0.5).");
-    SSIM_INTERNAL_CHECK_THROW(density_ > 0, std::invalid_argument, "Density must be positive.");
+    SSIM_INTERNAL_CHECK_THROW(density_ >= 0, std::invalid_argument, "Density must be positive.");
     using mp::make_buffer;
     host_mesh_ = mesh_.to(mp::device::cpu{});
     const index_t n_elem = mesh_.num_cells(), n_vert = mesh_.num_vertices();
@@ -734,7 +743,7 @@ public:
   using const_sparse = typename timestep_type::const_sys_matrix_view;
 
   std::pair<bool, const_sparse> eval_hessian_impl() {
-    step_.update_hessian(false, true);
+    step_.update_hessian(true, true);
     ++cnt_;
     return {true, step_.sysmatrix().as_const()};
   }

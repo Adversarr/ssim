@@ -93,9 +93,10 @@ public:
 
     std::map<std::pair<index_t, index_t>, index_t> ij_to_offset;
     auto task = hessian_topo.view().visit(
-      [&, cnt = static_cast<index_t>(0)](index_t row, index_t col, Scalar /* value */) mutable {
-        ij_to_offset[std::make_pair(row, col)] = cnt++;
-      });
+        [&, cnt = static_cast<index_t>(0)](index_t row, index_t col, Scalar /* value */) mutable {
+          assert(ij_to_offset.find(std::make_pair(row, col)) == ij_to_offset.end());
+          ij_to_offset[std::make_pair(row, col)] = cnt++;
+        });
     mp::par::seq().run(task);
 
     // 2. for each local stiffness matrix's element, computes where should we put into.

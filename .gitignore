@@ -7,7 +7,7 @@ build
 .cache
 out
 .vscode
-
+tmp
 
 # Compiled Object files
 *.slo

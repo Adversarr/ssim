@@ -211,9 +211,9 @@ public:
   Derived& derived() noexcept { return static_cast<Derived&>(*this); }
   const Derived& derived() const noexcept { return static_cast<const Derived&>(*this); }
 
-  SSIM_PRIMFUNC auto energy_op() const noexcept { return energy_operator(derived()); }
-  SSIM_PRIMFUNC auto stress_op() const noexcept { return stress_operator(derived()); }
-  SSIM_PRIMFUNC auto hessian_op() const noexcept { return hessian_operator(derived()); }
+  auto energy_op() const noexcept { return energy_operator(derived()); }
+  auto stress_op() const noexcept { return stress_operator(derived()); }
+  auto hessian_op() const noexcept { return hessian_operator(derived()); }
 
   Scalar lambda_;
   Scalar mu_;

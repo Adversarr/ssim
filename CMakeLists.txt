@@ -17,6 +17,14 @@ endif()
 # Inherit from mathprim's functionalities
 set(SSIM_ENABLE_CUDA ${MATHPRIM_ENABLE_CUDA})
 
+if (SSIM_ENABLE_CUDA)
+  set(CMAKE_CUDA_STANDARD 17)
+  set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+  set(CMAKE_CUDA_EXTENSIONS OFF)
+  set(CMAKE_CUDA_ARCHITECTURES 86)
+  enable_language(CUDA)
+endif()
+
 add_subdirectory(ssim)
 if(SSIM_BUILD_TESTS)
   add_subdirectory(tests)

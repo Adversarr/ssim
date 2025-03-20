@@ -38,7 +38,7 @@ public:
 
   basic_unstructured_view() = default;
   SSIM_INTERNAL_ENABLE_ALL_CTOR(basic_unstructured_view);
-  basic_unstructured_view(const batched_vertex& vertices, const batched_cell& cells) :
+  SSIM_PRIMFUNC basic_unstructured_view(const batched_vertex& vertices, const batched_cell& cells) :
       vertices_(vertices), cells_(cells) {}
 
   SSIM_PRIMFUNC const batched_vertex& vertices() const noexcept { return vertices_; }
