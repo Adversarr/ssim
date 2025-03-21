@@ -6,6 +6,7 @@ list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_LIST_DIR}/installed")
 option(SSIM_BUILD_TESTS "Build tests" ON)
 option(SSIM_ENABLE_WARNINGS "Enable warnings on test cases." ON)
 option(SSIM_BUILD_BINDINGS "Build Python bindings" OFF)
+option(SSIM_ENABLE_NATIVE_INSTR "Enable native instruction set" ON)
 
 project(ssim)
 

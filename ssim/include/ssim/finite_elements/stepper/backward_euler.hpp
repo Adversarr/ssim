@@ -13,26 +13,6 @@ public:
   index_t PhysicalDim, index_t TopologyDim, typename ElastModel,  //
   typename SparseBlas, typename Blas, typename ParImpl>
   void solve_impl(basic_time_step<Scalar, Device, PhysicalDim, TopologyDim, ElastModel, SparseBlas, Blas, ParImpl>& s) {
-    // auto dx_buf = make_buffer<Scalar>(s.forces().shape());
-    // auto dx = dx_buf.view();
-    // bool converged = false;
-    // int iter = 0;
-    // while (!converged) {
-    //   Scalar f = s.update_energy_and_gradients(false);
-    //   converged = s.check_convergence();
-    //   if (converged) {
-    //     break;
-    //   }
-
-    //   std::cout << "Iteration: " << iter++ << " Energy: " << f << std::endl;
-    //   s.update_hessian(true, true);
-    //   SparseSolver solver(s.sysmatrix().as_const());
-    //   solver.solve(dx.flatten(), s.forces().flatten());
-
-    //   auto expected = s.blas().dot(dx, s.forces());
-    //   std::cout << "Expected: " << expected << std::endl;
-    //   s.blas().axpy(-0.5, dx, s.next_deform());
-    // }
     variational_problem problem(s);
     problem.setup();
     using linesearch = mp::optim::backtracking_linesearcher<Scalar, Device, Blas>;
@@ -44,15 +24,20 @@ public:
       return problem.eval_hessian_impl();
     });
 
-    std::cout << optimizer.optimize(problem, [](auto info) {
-      std::cout << info << std::endl;
-    }) << std::endl;;
+    auto result_s = optimizer.optimize(problem);
+    result.converged_ = result_s.converged_;
+    result.iterations_ = result_s.iterations_;
+    result.grad_norm_ = result_s.grad_norm_;
+    result.last_change_ = result_s.last_change_;
+    result.value_ = result_s.value_;
   }
 
   template <typename Scalar, typename Device,                               //
             index_t PhysicalDim, index_t TopologyDim, typename ElastModel,  //
             typename SparseBlas, typename Blas, typename ParImpl>
   void reset_impl(basic_time_step<Scalar, Device, PhysicalDim, TopologyDim, ElastModel, SparseBlas, Blas, ParImpl>&) {}
+
+  mp::optim::optim_result<double> result;
 };
 
 
@@ -67,12 +52,19 @@ public:
     problem.setup();
     optimizer.stopping_criteria_.tol_grad_ = s.grad_convergence_threshold_abs();
     optimizer.stopping_criteria_.max_iterations_ = 1000;
-    optimizer.optimize(problem);
+    
+    auto result_s = optimizer.optimize(problem);
+    result.converged_ = result_s.converged_;
+    result.iterations_ = result_s.iterations_;
+    result.grad_norm_ = result_s.grad_norm_;
+    result.last_change_ = result_s.last_change_;
+    result.value_ = result_s.value_;
   }
 
   template <typename Scalar, typename Device,                               //
             index_t PhysicalDim, index_t TopologyDim, typename ElastModel,  //
             typename SparseBlas, typename Blas, typename ParImpl>
   void reset_impl(basic_time_step<Scalar, Device, PhysicalDim, TopologyDim, ElastModel, SparseBlas, Blas, ParImpl>&) {}
+  mp::optim::optim_result<double> result;
 };
 }

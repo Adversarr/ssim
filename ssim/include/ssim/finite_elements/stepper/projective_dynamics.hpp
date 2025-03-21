@@ -53,7 +53,8 @@ public:
   template <index_t PhysicalDim, index_t TopologyDim, typename ElastModel,  //
             typename SparseBlas, typename Blas, typename ParImpl>
   void reset_impl(basic_time_step<Scalar, Device, PhysicalDim, TopologyDim, ElastModel, SparseBlas, Blas, ParImpl>& s) {
-    auto v = s.mesh().vertices(), e = s.mesh().cells();
+    auto v = s.mesh().vertices();
+    auto e = s.mesh().cells();
     // computes laplacian + mass
     mp::par::seq pf;
     basic_unstructured<Scalar, mp::device::cpu, PhysicalDim, TopologyDim> mesh(s.mesh().num_vertices(),

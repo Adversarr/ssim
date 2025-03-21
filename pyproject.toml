@@ -1,5 +1,5 @@
 [project]
-name = "ssim"
+name = "pyssim"
 version = "0.1.0"
 description = "Simple simulator."
 authors = [
@@ -32,7 +32,7 @@ build-dir = "build"
 sdist.include = [ 'installed' ]
 
 [tool.scikit-build.cmake]
-build-type = "Debug"
+build-type = "Release"
 define.CMAKE_EXPORT_COMPILE_COMMANDS = true
 define.SSIM_BUILD_TESTS = false
 define.SSIM_BUILD_BINDINGS = true

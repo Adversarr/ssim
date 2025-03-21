@@ -1,20 +1,23 @@
 #include <nanobind/eigen/dense.h>
 #include <nanobind/eigen/sparse.h>
+#include <nanobind/stl/pair.h>
 
+#include <iostream>
 #include <mathprim/blas/cpu_blas.hpp>
+#include <mathprim/linalg/direct/eigen_support.hpp>  // IWYU pragma: keep
+#include <mathprim/linalg/iterative/precond/diagonal.hpp>
+#include <mathprim/linalg/iterative/solver/cg.hpp>
 #include <mathprim/parallel/openmp.hpp>
 #include <mathprim/sparse/blas/naive.hpp>
 #include <mathprim/supports/eigen_sparse.hpp>
-#include <memory>
+#include <mathprim/supports/stringify.hpp>
 
 #include "fem.hpp"
-#include "mathprim/blas/cpu_eigen.hpp"
-#include "mathprim/linalg/direct/cholmod.hpp"
-#include "mathprim/linalg/iterative/precond/diagonal.hpp"
-#include "mathprim/linalg/iterative/solver/cg.hpp"
-#include "mathprim/parallel/openmp.hpp"
-#include "mathprim/sparse/blas/eigen.hpp"
-#include "mathprim/supports/stringify.hpp"
+#ifdef MATHPRIM_ENABLE_CHOLMOD
+#  include "mathprim/linalg/direct/cholmod.hpp"
+#endif
+
+
 #include "ssim/elast/stable_neohookean.hpp"
 #include "ssim/finite_elements/stepper/backward_euler.hpp"
 #include "ssim/finite_elements/stepper/projective_dynamics.hpp"
@@ -39,7 +42,11 @@ using VertLike = Eigen::Matrix3X<Scalar>;
 using Cell = Eigen::Matrix<mp::index_t, 4, Eigen::Dynamic>;
 
 // Linear Sys
+#ifdef MATHPRIM_ENABLE_CHOLMOD
 using Direct = mp::sparse::direct::cholmod_chol<Scalar, csr_f>;
+#else
+using Direct = mp::sparse::direct::eigen_simplicial_ldlt<Scalar, csr_f>;
+#endif
 using Precond = mp::sparse::iterative::diagonal_preconditioner<Scalar, Device, csr_f, Blas>;
 using Iterative = mp::sparse::iterative::cg<Scalar, Device, SparseBlas, Blas>;
 // Step Solver
@@ -65,24 +72,42 @@ class timestep_wrapper {
 public:
   TimeStep step_;
   Solver solver_;
+  bool has_reset_ = false;
   SSIM_INTERNAL_MOVE(timestep_wrapper, default);
 
   timestep_wrapper(VertNb vert, CellNb cell, Scalar time_step, Scalar youngs_modulus, Scalar poisson_ratio,
                    Scalar density) :
       step_(make_mesh(vert, cell), time_step, youngs_modulus, poisson_ratio, density), solver_() {
-    step_.reset(solver_);
   }
 
-  void prepare_step() { step_.prepare_step(); }
+  void reset() {
+    step_.reset(solver_);
+    has_reset_ = true;
+  }
+
+  void prepare_step() {
+    if (!has_reset_) {
+      step_.reset(solver_);
+      std::cerr << "Warning: prepare_step() called before reset(), bad logic." << std::endl;
+      has_reset_ = true;
+    }
+
+    step_.prepare_step();
+  }
 
   void compute_step() { step_.compute_step(solver_); }
 
   void step_next() { step_.step_next(); }
 
-  void step() {
+  double step() {
+    auto start = std::chrono::high_resolution_clock::now();
     prepare_step();
     compute_step();
     step_next();
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed
+        = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(end - start);
+    return elapsed.count();
   }
 
   void mark_dirichlet(mp::index_t node_idx, Eigen::Vector3d targ_deform) {
@@ -107,6 +132,8 @@ public:
     }
   }
 
+  void set_rtol(Scalar rtol) { step_.set_threshold(rtol); }
+
   void add_gravity(Eigen::Vector3d gravity) {
     step_.add_ext_force_dof(0, gravity[0]);
     step_.add_ext_force_dof(1, gravity[1]);
@@ -121,35 +148,58 @@ public:
 
   VertLike forces() const { return mp::eigen_support::cmap(step_.forces()); }
 
+  Scalar update_energy_and_gradients() { return step_.update_energy_and_gradients(true); }
+
+  void update_hessian() { step_.update_hessian(true, true); }
+
+  Eigen::VectorX<Scalar> hessian_nonzeros() { return mp::eigen_support::cmap(step_.sysmatrix().values()); }
+
   Hessian hessian() const { return mp::eigen_support::map(step_.sysmatrix()); }
 };
 
 template class timestep_wrapper<Lbfgs>;
 template class timestep_wrapper<LbfgsPd>;
 template class timestep_wrapper<Newton>;
-
+using namespace nb::literals;
 template <typename Solver>
 static void bind_ts(nb::module_& m, const char* name) {
-  // auto ts = m.("TimeStep", "Time step class");
-  nb::class_<timestep_wrapper<Solver>> step(m, name);
-  step.def("prepare_step", &timestep_wrapper<Solver>::prepare_step, "Prepare time step")
-      .def("compute_step", &timestep_wrapper<Solver>::compute_step, "Compute time step")
-      .def("step_next", &timestep_wrapper<Solver>::step_next, "Step to next time step")
-      .def("step", &timestep_wrapper<Solver>::step, "Prepare, compute, and step to next time step")
-      .def("mark_dirichlet", &timestep_wrapper<Solver>::mark_dirichlet, "Mark dirichlet boundary condition")
-      .def("mark_dirichlet_batched", &timestep_wrapper<Solver>::mark_dirichlet_batched,
-           "Mark dirichlet boundary condition (batched.)")
-      .def("add_gravity", &timestep_wrapper<Solver>::add_gravity, "Add gravity")
-      .def("vertices", &timestep_wrapper<Solver>::vertices, "Get vertices")
-      .def("cells", &timestep_wrapper<Solver>::cells, "Get cells")
-      .def("deformation", &timestep_wrapper<Solver>::deformation, "Get deformation")
-      .def("forces", &timestep_wrapper<Solver>::forces, "Get forces")
-      .def("hessian", &timestep_wrapper<Solver>::hessian, "Get hessian")
-      .def(nb::init<VertNb, CellNb, Scalar, Scalar, Scalar, Scalar>(), "Initialize time step");
+  using Wrapped = timestep_wrapper<Solver>;
+  nb::class_<Wrapped> step(m, name);
+  step.def("reset", &Wrapped::reset, "Setup time step with solver")
+      .def("prepare_step", &Wrapped::prepare_step, "Prepare time step")
+      .def("compute_step", &Wrapped::compute_step, "Compute time step")
+      .def("step_next", &Wrapped::step_next, "Step to next time step")
+      .def("step", &Wrapped::step, "Prepare, compute, and step to next time step, return the total solve time.")
+      .def("mark_dirichlet", &Wrapped::mark_dirichlet, "Mark dirichlet boundary condition",  //
+           "node_idx"_a, "targ_deform"_a)
+      .def("mark_dirichlet_batched", &Wrapped::mark_dirichlet_batched,
+           "Mark dirichlet boundary condition (batched.)",  //
+           "verts"_a, "targ_deform"_a)
+      .def("set_rtol", &Wrapped::set_rtol, "Set relative tolerance",  //
+           "rtol"_a)
+      .def("add_gravity", &Wrapped::add_gravity, "Add gravity")
+      .def("vertices", &Wrapped::vertices, "Get vertices")
+      .def("cells", &Wrapped::cells, "Get cells")
+      .def("deformation", &Wrapped::deformation, "Get deformation")
+      .def("forces", &Wrapped::forces, "Get forces")
+      .def("update_energy_and_gradients", &Wrapped::update_energy_and_gradients, "Update energy and gradients")
+      .def("update_hessian", &Wrapped::update_hessian, "Update hessian")
+      .def("hessian", &Wrapped::hessian, "Get hessian")
+      .def("hessian_nonzeros", &Wrapped::hessian_nonzeros, "Get hessian nonzeros")
+      .def(nb::init<VertNb, CellNb, Scalar, Scalar, Scalar, Scalar>(), "Initialize time step",  //
+           "vert"_a, "cell"_a, "time_step"_a, "youngs_modulus"_a, "poisson_ratio"_a, "density"_a);
+}
+
+
+///// common shapes /////
+std::pair<VertLike, Cell> unit_box(mp::index_t nx, mp::index_t ny, mp::index_t nz) {
+  auto mesh = ssim::mesh::unit_box<Scalar>(nx, ny, nz);
+  return {mp::eigen_support::cmap(mesh.vertices()), mp::eigen_support::cmap(mesh.cells())};
 }
 
 void bind_fem_host(nb::module_& fem_mod) {
   bind_ts<Lbfgs>(fem_mod, "tet_lbfgs");
   bind_ts<LbfgsPd>(fem_mod, "tet_lbfgs_pd");
   bind_ts<Newton>(fem_mod, "tet_newton");
+  fem_mod.def("unit_box", &unit_box, "Create a unit box mesh", "nx"_a, "ny"_a, "nz"_a);
 }

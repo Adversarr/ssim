@@ -1,11 +1,10 @@
 #pragma once
-#include <iostream>
 #include <mathprim/blas/blas.hpp>
 #include <mathprim/core/buffer.hpp>
+#include <mathprim/optim/basic_optim.hpp>
 #include <mathprim/sparse/basic_sparse.hpp>
 #include <mathprim/sparse/cvt.hpp>
 #include <mathprim/sparse/gather.hpp>
-#include <mathprim/optim/basic_optim.hpp>
 #include <stdexcept>
 
 #include "boundary.hpp"
@@ -757,14 +756,13 @@ public:
   variational_problem& operator=(const variational_problem&) = delete;
   variational_problem(variational_problem&&) = delete;
   variational_problem& operator=(variational_problem&&) = delete;
-  ~variational_problem() { std::cout << "Total Evaluations: " << cnt_ << std::endl; }
 
   using const_sparse = typename timestep_type::const_sys_matrix_view;
 
   std::pair<bool, const_sparse> eval_hessian_impl() {
     step_.update_hessian(true, true);
     ++cnt_;
-    return {true, step_.sysmatrix().as_const()};
+    return {false, step_.sysmatrix().as_const()};
   }
 protected:
   void on_setup() { cnt_ = 0; }

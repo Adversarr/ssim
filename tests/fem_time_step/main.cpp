@@ -49,13 +49,14 @@ int main() {
   }
   // External forces.
   // using Solver = mp::sparse::direct::eigen_simplicial_ldlt<Scalar, mathprim::sparse::sparse_format::csr>;
-  using Solver = mp::sparse::direct::cholmod_chol<Scalar, mathprim::sparse::sparse_format::csr>;
-  // using Solver = mp::sparse::iterative::cg<Scalar, device::cpu, sparse::blas::eigen<Scalar, sparse::sparse_format::csr>,
-  //                                          blas::cpu_eigen<Scalar>, Precond>;
+  using Direct = mp::sparse::direct::cholmod_chol<Scalar, mathprim::sparse::sparse_format::csr>;
+  using Iterative = mp::sparse::iterative::cg<Scalar, device::cpu, sparse::blas::eigen<Scalar, sparse::sparse_format::csr>,
+                                           blas::cpu_eigen<Scalar>, Precond>;
   // using EigenSolver = Eigen::Sparse
   step.add_ext_force_dof(1, -9.8);
   // fem::time_step_solver_lbfgs ts_solve;
-  fem::time_step_solver_h0<Solver> ts_solve;
+  // fem::time_step_solver_pd<Direct> ts_solve;
+  fem::time_step_solver_backward_euler<Iterative> ts_solve;
   step.set_threshold(1e-3);
   step.reset(ts_solve);
   Scalar total = 0;
@@ -67,7 +68,7 @@ int main() {
   // std::cout << eigen_support::map(step.sysmatrix()).toDense() << std::endl;
   std::cout << "Mass: " << total / 3 << std::endl;
   std::cout << "Threshold: " << step.grad_convergence_threshold_abs() << std::endl;
-  Solver solver(step.sysmatrix().as_const());
+  Direct solver(step.sysmatrix().as_const());
   auto x_buf = make_buffer<Scalar>(step.forces().shape());
   auto x = x_buf.view();
 
