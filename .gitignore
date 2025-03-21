@@ -8,6 +8,9 @@ build
 out
 .vscode
 tmp
+cmake-*
+.idea
+perf.data
 
 # Compiled Object files
 *.slo

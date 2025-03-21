@@ -91,7 +91,7 @@ struct stress_element_to_vertex {
 };
 
 template <typename Scalar, typename Device, index_t PhysicalDim, index_t TopologyDim, typename HessianOp>
-auto make_wrapped_pfpx(
+auto vhessian(
     HessianOp op,
     mp::contiguous_view<const Scalar, mp::shape_t<mp::keep_dim, PhysicalDim * PhysicalDim, PhysicalDim * TopologyDim>,
                         Device>
@@ -352,6 +352,11 @@ public:
   Scalar poisson() const noexcept { return poisson_; }
   Scalar density() const noexcept { return density_; }
   Scalar damping() const noexcept { return damping_; }
+
+  ///// Helpers /////
+  ElastModel uniform_elasticity() const noexcept { return ElastModel{youngs_, poisson_}; }
+  boundary_type boundary_enforcer() noexcept { return {mesh_.const_view(), dof_type(), dbc_values()}; }
+  index_t total_dofs() const noexcept { return mesh_.num_vertices() * dofs_per_node; }
 
   ////////////////////////////////////////////////
   /// Precompute stage helpers
@@ -621,9 +626,8 @@ public:
     auto deform_grad = deform_grad_.view();
     auto compute_hessian = model.hessian_op();
     auto pfpx = pfpx_.const_view();
-    auto wrapped_pfpx
-        = internal::make_wrapped_pfpx<Scalar, Device, PhysicalDim, TopologyDim>(compute_hessian, pfpx, make_spsd);
-    parallel().vmap(wrapped_pfpx, local_stiffness, deform_grad, pfpx);
+    auto vert_hes = internal::vhessian<Scalar, Device, PhysicalDim, TopologyDim>(compute_hessian, pfpx, make_spsd);
+    parallel().vmap(vert_hes, local_stiffness, deform_grad, pfpx);
 
     mp::sparse::basic_gather_operator<Scalar, Device, 0> gather_op{
       sysmat_nonzeros,              // hessian on vertices,

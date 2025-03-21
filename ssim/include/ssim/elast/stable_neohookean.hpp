@@ -90,7 +90,6 @@ private:
     mp::eigen_support::cmap(out) = hess;
   }
 
-private:
   SSIM_PRIMFUNC Scalar delta(Scalar lambda, Scalar mu) const noexcept {
     if constexpr (Ndim == 2) {
       const Scalar t = mu / lambda;
@@ -102,6 +101,13 @@ private:
     } else /* Ndim == 3 */ {
       return 1;
     }
+  }
+
+  Scalar approximated_diffusivity_impl() const noexcept { 
+    Scalar lambda = this->lambda_, mu = this->mu_;
+    Scalar true_lambda = lambda + static_cast<Scalar>(5. / 6.) * mu;
+    Scalar true_mu = static_cast<Scalar>(4. / 3.) * mu;
+    return true_lambda + 2 * true_mu;
   }
 };
 }  // namespace ssim::elast

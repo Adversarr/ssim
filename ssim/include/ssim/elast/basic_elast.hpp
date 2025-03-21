@@ -61,6 +61,9 @@ public:
   basic_elast_model& operator=(const basic_elast_model&) = default;
   basic_elast_model& operator=(basic_elast_model&&) = default;
 
+  scalar_type approximated_diffusivity() const noexcept { return derived().approximated_diffusivity_impl(); }
+
+
   SSIM_PRIMFUNC scalar_type energy(const def_grad_type& F,       //
                                    const svd_matrix_type& U,     //
                                    const svd_sigma_type& sigma,  //
@@ -214,9 +217,12 @@ public:
   auto energy_op() const noexcept { return energy_operator(derived()); }
   auto stress_op() const noexcept { return stress_operator(derived()); }
   auto hessian_op() const noexcept { return hessian_operator(derived()); }
-
+  
   Scalar lambda_;
   Scalar mu_;
+
+protected:
+  scalar_type approximated_diffusivity_impl() const noexcept { return lambda_ + 2 * mu_; }
 };
 
 }  // namespace ssim::elast

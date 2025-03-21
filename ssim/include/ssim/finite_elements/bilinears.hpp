@@ -231,11 +231,14 @@ struct linear_element_integrator
 
     for (index_t i = 0; i < TopologyDim; ++i) {
       for (index_t j = 0; j < TopologyDim; ++j) {
-        Scalar out;
+        Scalar out = 0;
         if constexpr (Partial == 0) {
           out = elem.integrate_f_f(i, j);
         } else if constexpr (Partial == 1) {
-          out = elem.integrate_pf_pf(i, j, 0, 0) + elem.integrate_pf_pf(i, j, 1, 1);
+          // out = elem.integrate_pf_pf(i, j, 0, 0) + elem.integrate_pf_pf(i, j, 1, 1);
+          for (index_t kl = 0; kl < PhysicalDim; ++kl) {
+            out += elem.integrate_pf_pf(i, j, kl, kl);
+          }
         } else {
           static_assert(mp::internal::always_false_v<local_mat>, "Invalid P");
         }
