@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_LIST_DIR}/installed")
 option(SSIM_BUILD_TESTS "Build tests" ON)
 option(SSIM_ENABLE_WARNINGS "Enable warnings on test cases." ON)
+option(SSIM_BUILD_BINDINGS "Build Python bindings" OFF)
 
 project(ssim)
 
@@ -28,4 +29,8 @@ endif()
 add_subdirectory(ssim)
 if(SSIM_BUILD_TESTS)
   add_subdirectory(tests)
+endif()
+
+if(SSIM_BUILD_BINDINGS)
+  add_subdirectory(bindings)
 endif()

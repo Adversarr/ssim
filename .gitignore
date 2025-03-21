@@ -11,6 +11,8 @@ tmp
 cmake-*
 .idea
 perf.data
+.venv
+uv.lock
 
 # Compiled Object files
 *.slo

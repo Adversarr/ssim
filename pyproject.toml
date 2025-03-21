@@ -1,0 +1,38 @@
+[project]
+name = "ssim"
+version = "0.1.0"
+description = "Simple simulator."
+authors = [
+    {name = "Adversarr",email = "1444781838@qq.com"}
+]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy (>=2.0.0,<3.0.0)",
+    "scipy (>=1.13.0,<2.0.0)",
+    "setuptools (>=75.8.2,<76.0.0)",
+    "nanobind (>=2.5.0,<3.0.0)",
+    # "torch (>=2.0.0,<3.0.0)"
+    "matplotlib>=3.10.1",
+    "pyqt6>=6.8.1",
+]
+
+[build-system]
+requires = [
+    "scikit-build-core >=0.10",
+    "nanobind >=2.5.0"
+]
+build-backend = "scikit_build_core.build"
+
+#### Build CMake.
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+build-dir = "build"
+sdist.include = [ 'installed' ]
+
+[tool.scikit-build.cmake]
+build-type = "Debug"
+define.CMAKE_EXPORT_COMPILE_COMMANDS = true
+define.SSIM_BUILD_TESTS = false
+define.SSIM_BUILD_BINDINGS = true

@@ -367,10 +367,12 @@ public:
   }
   template <typename Algorithm = time_step_solver_nothing>
   void reset(basic_time_step_solver<Algorithm>& solver) {
-    SSIM_INTERNAL_CHECK_THROW(youngs_ >= 0, std::invalid_argument, "Young's modulus must be positive.");
+    SSIM_INTERNAL_CHECK_THROW(youngs_ >= 0, std::invalid_argument,
+                              "Young's modulus must be positive, got " + std::to_string(youngs_));
     SSIM_INTERNAL_CHECK_THROW(poisson_ > 0 && poisson_ < 0.5, std::invalid_argument,
-                              "Poisson's ratio must be in (0, 0.5).");
-    SSIM_INTERNAL_CHECK_THROW(density_ >= 0, std::invalid_argument, "Density must be positive.");
+                              "Poisson's ratio must be in (0, 0.5), got " + std::to_string(poisson_));
+    SSIM_INTERNAL_CHECK_THROW(density_ >= 0, std::invalid_argument,
+                              "Density must be positive, got " + std::to_string(density_));
     using mp::make_buffer;
     host_mesh_ = mesh_.to(mp::device::cpu{});
     const index_t n_elem = mesh_.num_cells(), n_vert = mesh_.num_vertices();
@@ -386,24 +388,25 @@ public:
         buf.fill_bytes(0);
         return buf;
       };
-      deformation_ = zero_buffer();
       inertia_deform_ = zero_buffer();
-      prev_deform_ = zero_buffer();
       next_deform_ = zero_buffer();
-      velocity_ = zero_buffer();
       forces_ = zero_buffer();
       temp_buffer_ = zero_buffer();
     }
 
-    {
-      if (!ext_accel_) {
-        ext_accel_ = make_buffer<Scalar, Device>(mesh_.vertices().shape());
-        ext_accel_.fill_bytes(0);
-      }
-      if (!dbc_values_) {
-        dbc_values_ = make_buffer<Scalar, Device>(mesh_.vertices().shape());
-        dbc_values_.fill_bytes(0);
-      }
+    { 
+      auto zero_if_not_valid = [this](auto& buf) {
+        if (!buf || buf.shape() != mesh_.vertices().shape()) {
+          buf = make_buffer<Scalar, Device>(mesh_.vertices().shape());
+          buf.fill_bytes(0);
+        }
+      };
+      zero_if_not_valid(ext_accel_);
+      zero_if_not_valid(dbc_values_);
+      // zero_if_not_valid(dof_type_);
+      zero_if_not_valid(prev_deform_);
+      zero_if_not_valid(deformation_);
+      zero_if_not_valid(velocity_);
       if (!dof_type_) {
         dof_type_ = make_buffer<node_boundary_type, Device>(mesh_.vertices().shape());
         dof_type_.fill_bytes(0);
@@ -552,6 +555,18 @@ public:
       dof_idx += PhysicalDim;
     }
     parallel().vmap(dof_mod_work{dof_idx, del}, ext_accel_);
+  }
+
+  /// @brief restore states from current/prev deformation
+  void restore() {
+    auto prev = prev_deform_.const_view();
+    auto current = deformation_.const_view();
+    auto vel = velocity_.view();
+    boundary_enforcer().value(parallel(), prev);
+    boundary_enforcer().value(parallel(), current);
+    mp::copy(vel, current);
+    blas().axpy(-1.0, prev, vel); // vel = current - prev
+    blas().scal(1.0 / time_step_, vel);
   }
 
   void update_deformation_gradient() {
