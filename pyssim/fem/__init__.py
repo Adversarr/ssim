@@ -1,7 +1,7 @@
 from typing import Literal, Tuple
 import libssim
 import numpy as np
-from scipy.sparse import coo_matrix
+from scipy.sparse import csr_matrix
 
 def unit_box(nx: int, ny: int, nz: int) -> Tuple[np.ndarray, np.ndarray]:
     return libssim.fem.unit_box(nx, ny, nz)
@@ -75,10 +75,13 @@ class TetFiniteElementSolver_Host:
     def update_energy_and_gradients(self):
         self.solver.update_energy_and_gradients()
 
-    def update_hessian(self):
-        self.solver.update_hessian()
+    def update_hessian(self, make_spsd=True):
+        self.solver.update_hessian(make_spsd)
 
-    def hessian(self) -> coo_matrix:
+    def mass_matrix(self) -> csr_matrix:
+        return self.solver.mass_matrix()
+
+    def hessian(self) -> csr_matrix:
         return self.solver.hessian()
 
     def hessian_nonzeros(self) -> np.ndarray:

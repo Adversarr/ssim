@@ -150,7 +150,9 @@ public:
 
   Scalar update_energy_and_gradients() { return step_.update_energy_and_gradients(true); }
 
-  void update_hessian() { step_.update_hessian(true, true); }
+  void update_hessian(bool make_spsd) { step_.update_hessian(true, make_spsd); }
+
+  Hessian mass_matrix() const noexcept { return mp::eigen_support::map(step_.mass_matrix()); }
 
   Eigen::VectorX<Scalar> hessian_nonzeros() { return mp::eigen_support::cmap(step_.sysmatrix().values()); }
 
@@ -183,7 +185,9 @@ static void bind_ts(nb::module_& m, const char* name) {
       .def("deformation", &Wrapped::deformation, "Get deformation")
       .def("forces", &Wrapped::forces, "Get forces")
       .def("update_energy_and_gradients", &Wrapped::update_energy_and_gradients, "Update energy and gradients")
-      .def("update_hessian", &Wrapped::update_hessian, "Update hessian")
+      .def("update_hessian", &Wrapped::update_hessian, "Update hessian",//
+           "make_spsd"_a = true)
+      .def("mass_matrix", &Wrapped::mass_matrix, "Get mass matrix")
       .def("hessian", &Wrapped::hessian, "Get hessian")
       .def("hessian_nonzeros", &Wrapped::hessian_nonzeros, "Get hessian nonzeros")
       .def(nb::init<VertNb, CellNb, Scalar, Scalar, Scalar, Scalar>(), "Initialize time step",  //

@@ -45,9 +45,7 @@ public:
     problem.setup();
     optimizer.stopping_criteria_.tol_grad_ = s.grad_convergence_threshold_abs();
     optimizer.stopping_criteria_.max_iterations_ = 1000;
-    std::cout << optimizer.optimize(problem, [](const auto& res) {
-      std::cout << res << std::endl;
-    }) << std::endl;
+    optimizer.optimize(problem);
   }
 
   template <index_t PhysicalDim, index_t TopologyDim, typename ElastModel,  //
@@ -138,9 +136,10 @@ public:
     problem.setup();
     optimizer.stopping_criteria_.tol_grad_ = s.grad_convergence_threshold_abs();
     optimizer.stopping_criteria_.max_iterations_ = 1000;
-    std::cout << optimizer.optimize(problem, [](const auto& res) {
-      std::cout << res << std::endl;
-    }) << std::endl;
+    optimizer.optimize(problem);
+    // std::cout << optimizer.optimize(problem, [](const auto& res) {
+    //   std::cout << res << std::endl;
+    // }) << std::endl;
   }
 
   template <index_t PhysicalDim, index_t TopologyDim, typename ElastModel,  //
