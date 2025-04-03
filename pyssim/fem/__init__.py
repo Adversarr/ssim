@@ -86,3 +86,6 @@ class TetFiniteElementSolver_Host:
 
     def hessian_nonzeros(self) -> np.ndarray:
         return self.solver.hessian_nonzeros()
+
+    def mark_general_batched(self, verts: np.ndarray):
+        self.solver.mark_general_batched(verts)

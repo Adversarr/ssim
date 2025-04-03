@@ -124,22 +124,20 @@ public:
       solver().solve(z, q);
     }
   };
+
   template <index_t PhysicalDim, index_t TopologyDim, typename ElastModel,  //
             typename SparseBlas, typename Blas, typename ParImpl>
   void solve_impl(basic_time_step<Scalar, Device, PhysicalDim, TopologyDim, ElastModel, SparseBlas, Blas, ParImpl>& s) {
     using ls = mathprim::optim::backtracking_linesearcher<Scalar, Device, Blas>;
     mp::optim::l_bfgs_optimizer<Scalar, Device, Blas, ls, precond> optimizer;
     optimizer.preconditioner_.set_solver(&solver_);
-    s.update_hessian(true, true);
+    s.update_hessian(false, true);
     solver_.factorize();
     variational_problem problem(s);
     problem.setup();
     optimizer.stopping_criteria_.tol_grad_ = s.grad_convergence_threshold_abs();
     optimizer.stopping_criteria_.max_iterations_ = 1000;
     optimizer.optimize(problem);
-    // std::cout << optimizer.optimize(problem, [](const auto& res) {
-    //   std::cout << res << std::endl;
-    // }) << std::endl;
   }
 
   template <index_t PhysicalDim, index_t TopologyDim, typename ElastModel,  //

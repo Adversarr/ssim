@@ -13,6 +13,7 @@ cmake-*
 perf.data
 .venv
 uv.lock
+dist
 
 # Compiled Object files
 *.slo

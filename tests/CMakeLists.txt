@@ -19,6 +19,7 @@ SSIM_ADD_TEST(fem_intro)
 SSIM_ADD_TEST(fem_local_global)
 SSIM_ADD_TEST(fem_time_step_diff)
 SSIM_ADD_EXECUTABLE(fem_time_step)
+SSIM_ADD_EXECUTABLE(fem_ext_ai)
 
 if(SSIM_ENABLE_CUDA)
   SSIM_ADD_EXECUTABLE(fem_cu)

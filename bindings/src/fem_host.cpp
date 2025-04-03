@@ -57,9 +57,9 @@ using VertNb = nb::ndarray<Scalar, nb::shape<-1, 3>, nb::device::cpu, nb::c_cont
 using CellNb = nb::ndarray<mp::index_t, nb::shape<-1, 4>, nb::device::cpu, nb::c_contig>;
 using IdxNb = nb::ndarray<mp::index_t, nb::shape<-1>, nb::device::cpu, nb::c_contig>;
 
-Mesh make_mesh(VertNb vert, CellNb cell) {
-  auto vert_view = nbex::to_mp_view_standard(vert);
-  auto cell_view = nbex::to_mp_view_standard(cell);
+static Mesh make_mesh(VertNb vert, CellNb cell) {
+  auto vert_view = nbex::to_mathprim(vert);
+  auto cell_view = nbex::to_mathprim(cell);
 
   auto mesh = Mesh(vert_view.shape(0), cell_view.shape(0));
   mp::copy(mesh.vertices(), vert_view);
@@ -132,6 +132,17 @@ public:
     }
   }
 
+  void mark_general_batched(Eigen::VectorX<mp::index_t> verts) {
+    auto dofs = step_.dof_type();
+    auto targ = step_.dbc_values();
+    for (mp::index_t i = 0; i < verts.size(); ++i) {
+      for (mp::index_t j = 0; j < 3; ++j) {
+        dofs(verts[i], j) = ssim::fem::node_boundary_type::general;
+        targ(verts[i], j) = 0;
+      }
+    }
+  }
+
   void set_rtol(Scalar rtol) { step_.set_threshold(rtol); }
 
   void add_gravity(Eigen::Vector3d gravity) {
@@ -150,7 +161,7 @@ public:
 
   Scalar update_energy_and_gradients() { return step_.update_energy_and_gradients(true); }
 
-  void update_hessian(bool make_spsd) { step_.update_hessian(true, make_spsd); }
+  void update_hessian(bool make_spsd) { step_.update_hessian(false, make_spsd); }
 
   Hessian mass_matrix() const noexcept { return mp::eigen_support::map(step_.mass_matrix()); }
 
@@ -177,6 +188,9 @@ static void bind_ts(nb::module_& m, const char* name) {
       .def("mark_dirichlet_batched", &Wrapped::mark_dirichlet_batched,
            "Mark dirichlet boundary condition (batched.)",  //
            "verts"_a, "targ_deform"_a)
+      .def("mark_general_batched", &Wrapped::mark_general_batched,
+           "Unset dirichlet boundary condition (batched.)",  //
+           "verts"_a)
       .def("set_rtol", &Wrapped::set_rtol, "Set relative tolerance",  //
            "rtol"_a)
       .def("add_gravity", &Wrapped::add_gravity, "Add gravity")
@@ -185,7 +199,7 @@ static void bind_ts(nb::module_& m, const char* name) {
       .def("deformation", &Wrapped::deformation, "Get deformation")
       .def("forces", &Wrapped::forces, "Get forces")
       .def("update_energy_and_gradients", &Wrapped::update_energy_and_gradients, "Update energy and gradients")
-      .def("update_hessian", &Wrapped::update_hessian, "Update hessian",//
+      .def("update_hessian", &Wrapped::update_hessian, "Update hessian",  //
            "make_spsd"_a = true)
       .def("mass_matrix", &Wrapped::mass_matrix, "Get mass matrix")
       .def("hessian", &Wrapped::hessian, "Get hessian")
