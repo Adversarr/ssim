@@ -623,7 +623,7 @@ public:
     return inertia_energy + elast_energy;
   }
 
-  void update_hessian(bool is_deform_grad_updated = false, bool make_spsd = false) {
+  void update_hessian(bool is_deform_grad_updated = false, bool make_spsd = false, bool filter_dbc = true) {
     if (!is_deform_grad_updated) {
       update_deformation_gradient();
     }
@@ -651,8 +651,10 @@ public:
     parallel().run(gather_op);
 
     // filter out the dirichlet boundary conditions.
-    boundary_type enforce(mesh_.const_view(), dof_type(), dbc_values());
-    enforce.hessian(parallel(), sysmatrix());
+    if (filter_dbc) {
+      boundary_type enforce(mesh_.const_view(), dof_type(), dbc_values());
+      enforce.hessian(parallel(), sysmatrix());
+    }
   }
 
   bool check_convergence() {

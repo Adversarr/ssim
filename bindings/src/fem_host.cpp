@@ -161,7 +161,8 @@ public:
 
   Scalar update_energy_and_gradients() { return step_.update_energy_and_gradients(true); }
 
-  void update_hessian(bool make_spsd) { step_.update_hessian(false, make_spsd); }
+  void update_hessian(bool make_spsd) { step_.update_hessian(false, make_spsd, true); }
+  void update_hessian_unfiltered(bool make_spsd) { step_.update_hessian(false, make_spsd, false); }
 
   Hessian mass_matrix() const noexcept { return mp::eigen_support::map(step_.mass_matrix()); }
 
@@ -200,6 +201,8 @@ static void bind_ts(nb::module_& m, const char* name) {
       .def("forces", &Wrapped::forces, "Get forces")
       .def("update_energy_and_gradients", &Wrapped::update_energy_and_gradients, "Update energy and gradients")
       .def("update_hessian", &Wrapped::update_hessian, "Update hessian",  //
+           "make_spsd"_a = true)
+      .def("update_hessian_unfiltered", &Wrapped::update_hessian_unfiltered, "Update hessian",  //
            "make_spsd"_a = true)
       .def("mass_matrix", &Wrapped::mass_matrix, "Get mass matrix")
       .def("hessian", &Wrapped::hessian, "Get hessian")

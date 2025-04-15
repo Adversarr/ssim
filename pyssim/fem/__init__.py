@@ -79,6 +79,9 @@ class TetFiniteElementSolver_Host:
     def update_hessian(self, make_spsd=True):
         self.solver.update_hessian(make_spsd)
 
+    def update_hessian_unfiltered(self, make_spsd=True):
+        self.solver.update_hessian_unfiltered(make_spsd)
+
     def mass_matrix(self) -> csr_matrix:
         return self.solver.mass_matrix()
 
