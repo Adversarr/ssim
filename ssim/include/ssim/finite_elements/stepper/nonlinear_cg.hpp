@@ -39,7 +39,8 @@ public:
 };
 
 template <typename Scalar, typename Device, typename SparseBlas>
-class time_step_solver_ncg_with_ext_prec : public basic_time_step_solver<time_step_solver_ncg> {
+class time_step_solver_ncg_with_ext_prec
+    : public basic_time_step_solver<time_step_solver_ncg_with_ext_prec<Scalar, Device, SparseBlas>> {
 public:
   template <index_t PhysicalDim, index_t TopologyDim, typename ElastModel,  //
             typename Blas, typename ParImpl>
@@ -86,7 +87,7 @@ public:
   void reset_impl(
       basic_time_step<Scalar, Device, PhysicalDim, TopologyDim, ElastModel, SparseBlas, Blas, ParImpl>& step) {
     index_t total_dofs = step.mesh().num_vertices() * PhysicalDim;
-    z_ = mp::make_buffer<Scalar>(total_dofs);
+    z_ = mp::make_buffer<Scalar, Device>(total_dofs);
     z_.fill_bytes(0);
   }
 

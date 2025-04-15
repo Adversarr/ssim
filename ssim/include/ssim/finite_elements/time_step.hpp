@@ -504,10 +504,10 @@ public:
     auto vel = velocity_.view();
     auto accel = ext_accel_.view();
     auto solution = next_deform_.view();
-    // 1. u_Predict <- u + dt * v + 0.5 * dt^2 * a
+    // 1. u_Predict <- u + dt * v + dt^2 * a
     mp::copy(inertia, deform);
     blas().axpy(time_step_, vel, inertia);
-    blas().axpy(0.5 * time_step_ * time_step_, accel, inertia);
+    blas().axpy(time_step_ * time_step_, accel, inertia);
 
     // 2. apply dirichlet boundary conditions.
     auto vals = dbc_values_.const_view();
